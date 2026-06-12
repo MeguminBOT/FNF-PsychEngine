@@ -1,128 +1,57 @@
 ![PsychionalEngineLogo](docs/img/PsychEngineLogoTweak.png)
 
-Engine originally used on [Mind Games Mod](https://gamebanana.com/mods/301107), intended to be a fix for the vanilla version's many issues while keeping the casual play aspect of it. Also aiming to be an easier alternative to newbie coders.
+Continuation of where 1.0.4 left off with bugfixes, performance improvements and updated to work with newer libraries.  If you're looking for really niche cool custom features, then this fork is not for you, this is aiming to just be "Psych Engine" as if the Psych Team kept maintaining it.
 
-## Installation:
+**Currently, near all existing mods should work as intended, or just require minor changes, if something is broken please let me know. **
 
-Refer to [the Build Instructions](/docs/BUILDING.md)
+No elaborate image or video previews really necessary yet as it currently is just your regular Psych Engine really.
+Monthly releases at minimum for the foreseeable future. Patches may come in between if needed.
 
-## Customization:
+*Note:
+AI coding agents have been used but carefully human reviewed by me and two other coders. Coding agents are fine if you know what you are doing.*
 
-If you wish to disable things like *Lua Scripts* or *Video Cutscenes*, you can refer to the `Project.xml` file.
-
-Inside `Project.xml`, you will find several variables to customize Psych Engine to your liking.
-
-To start you off, disabling *Video Cutscenes* should be simple, simply delete the line `"VIDEOS_ALLOWED"` or comment it out by wrapping the line in XML-like comments, like this: `<!-- YOUR_LINE_HERE -->`
-
-Same goes for *Lua Scripts*, comment out or delete the line with `LUA_ALLOWED`, this and other customization options are all available within the `Project.xml` file.
-
-## Softcoding (.lua/.hx)
-For this you can head over to [the wiki](https://shadowmario.github.io/psychengine.lua)
-
-There you can learn how to use the 212 PlayState funcions in your mod!
-
-## Credits:
-* Shadow Mario - Main Programmer and Head of Psych Engine.
-* Riveren - Main Artist/Animator of Psych Engine.
-
-### Special Thanks
-* bbpanzu - Ex-Team Member (Programmer).
-* crowplexus - HScript Iris, Input System v3, and Other PRs.
-* Kamizeta - Creator of Pessy, Psych Engine's mascot.
-* MaxNeton - Loading Screen Easter Egg Artist/Animator.
-* Keoiki - Note Splash Animations and Latin Alphabet.
-* SqirraRNG - Crash Handler and Base code for Chart Editor's Waveform.
-* EliteMasterEric - Runtime Shaders support and Other PRs.
-* MAJigsaw77 - .MP4 Video Loader Library (hxvlc).
-* iFlicky - Composer of Psync, Tea Time and some sound effects.
-* KadeDev - Fixed some issues on Chart Editor and Other PRs.
-* superpowers04 - LUA JIT Fork.
-* CheemsAndFriends - Creator of the original FlxAnimate library.
-* MaybeMaru - Creator of flixel-animate, the Texture Atlas backend used in 1.1+.
-* Ezhalt - Pessy's Easter Egg Jingle.
-* MaliciousBunny - Video for the Final Update.
-
-***
-
-# Features
-
-## Attractive animated dialogue boxes:
-
-![Animated Dialogue Boxes](docs/img/dialogue.gif)
-
-## New Main Menu
-* A brand new menu that makes your experience even better!
-![Main Menu](docs/img/MainMenu.png)
-
-## Mod Support
-* Probably one of the main points of this engine, you can code in .lua files outside of the source code, making your own weeks without even messing with the source!
-* Comes with a Mod Organizing/Disabling Menu.
-![Mod Support](docs/img/ModsMenu.png)
+## Highlights
+- **Engine version: 1.1** (up from 1.0.4)
+- **Newer libs** -- upgraded to current HaxeFlixel 6, OpenFL 9.5,
+  and Lime 8.3.
+- **Building from source "just works" again** -- the install scripts have been updated and builds cleanly on Windows, Linux, and macOS without hunting down compatible library versions.
+- **80+ bug fixes**, from edge cases, rare cases and common bugs 
+- **30+ performance improvements**, especially around input handling, the
+  scripting layer, and gameplay hot paths.
+- **New faster Lua backend**
+- **New: ModSecurity** -- Psych will now scan mod scripts for risky behaviour and ask you whether to trust each mod before running it.
+Full release notes on the github page.
 
 
-## Atleast one change to every week:
-### Week 1:
-  * New Dad Left sing sprite
-  * Unused stage lights are now used
-  * Dad Battle has a spotlight effect for the breakdown
-### Week 2:
-  * Both BF and Skid & Pump does "Hey!" animations
-  * Thunders does a quick light flash and zooms the camera in slightly
-  * Added a quick transition/cutscene to Monster
-### Week 3:
-  * BF does "Hey!" during Philly Nice
-  * Blammed has a cool new colors flash during that sick part of the song
-### Week 4:
-  * Better hair physics for Mom/Boyfriend (Maybe even slightly better than Week 7's :eyes:)
-  * Henchmen die during all songs. Yeah :(
-### Week 5:
-  * Bottom Boppers and GF does "Hey!" animations during Cocoa and Eggnog
-  * On Winter Horrorland, GF bops her head slower in some parts of the song.
-### Week 6:
-  * On Thorns, the HUD is hidden during the cutscene
-  * Also there's the Background girls being spooky during the "Hey!" parts of the Instrumental
+### (Docs) Migrating mods from 1.0.x to 1.1.x:
+<https://github.com/MeguminBOT/FNF-PsychEngine/blob/master/docs/MIGRATION_1.0.4_to_1.1.md>
+### (Docs) Full fork differences:
+<https://github.com/MeguminBOT/FNF-PsychEngine/blob/master/docs/FORK_CHANGES.md>
 
-## Cool new Chart Editor changes and countless bug fixes
-![Chart Editor](docs/img/chart.png)
-* You can now chart "Event" notes, which are bookmarks that trigger specific actions that usually were hardcoded on the vanilla version of the game.
-* Your song's BPM can now have decimal values
-* You can manually adjust a Note's strum time if you're really going for milisecond precision
-* You can change a note's type on the Editor, it comes with five example types:
-  * Alt Animation: Forces an alt animation to play, useful for songs like Ugh/Stress
-  * Hey: Forces a "Hey" animation instead of the base Sing animation, if Boyfriend hits this note, Girlfriend will do a "Hey!" too.
-  * Hurt Notes: If Boyfriend hits this note, he plays a miss animation and loses some health.
-  * GF Sing: Rather than the character hitting the note and singing, Girlfriend sings instead.
-  * No Animation: Character just hits the note, no animation plays.
+### Known issues:
+- [Mods Menu] Enable all button is still bugged.
+- [Loading Screen] May freeze in rare cases
+- [Base game: MILF] GF pos is wrong
+- ~~[Selection Box broken in chart editor] ~~
+### To be added:
+- SWF toggle for flixel-animate
+~~- Input text fields: Improve writing uppercase letters.~~
+- Some minor common events (e.g. Camera Flash)
+- Better flashing lights condition checks.
+- Non pitched audio when the playback rate is modified.
+- HScript backend swap, possibly support classes.
+~~- Less frequent Mod Trust dialogs. (Happens on all runHaxeCode calls currently)~~
+- Support Opus and WebM files.
+- Better volume control
+- Improve note skins (keep backwards compatible)
+~~- Mod settings in the Pause/Freeplay Menus~~
+- Freeplay Menu improvements (Search, sort by, group by)
+- Add common options/modifiers from other VSRGs.
+- Dynamic difficulty detection (less accidental missing json errors
+- Proper Android support
 
-## Multiple editors to assist you in making your own Mod
-![Master Editor Menu](docs/img/editors.png)
-* Working both for Source code modding and Downloaded builds!
+Latest experimental dev build for testers: https://discord.com/channels/922849922175340586/1505362306010185728/1511509185890750535
 
-## Story mode menu rework:
-![Story Mode Menu](docs/img/storymode.png)
-* Added a different BG to every song (less Tutorial)
-* All menu characters are now in individual spritesheets, makes modding it easier.
-
-## Credits menu
-![Credits Menu](docs/img/credits.png)
-* You can add a head icon, name, description and a Redirect link for when the player presses Enter while the item is currently selected.
-
-## Awards/Achievements
-* The engine comes with 16 example achievements that you can mess with and learn how it works (Check Achievements.hx and search for "checkForAchievement" on PlayState.hx)
-![Achievements](docs/img/Achievements.png)
-
-## Options menu:
-* You can change Note colors, Delay and Combo Offset, Controls and Preferences there.
- * On Preferences you can toggle Downscroll, Middlescroll, Anti-Aliasing, Framerate, Low Quality, Note Splashes, Flashing Lights, etc.
-![Options](docs/img/Options.png)
-
-## Other gameplay features:
-* When the enemy hits a note, their strum note also glows.
-* Lag doesn't impact the camera movement and player icon scaling anymore.
-* Some stuff based on Week 7's changes has been put in (Background colors on Freeplay, Note splashes)
-* You can reset your Score on Freeplay/Story Mode by pressing Reset button.
-* You can listen to a song or adjust Scroll Speed/Damage taken/etc. on Freeplay by pressing Space.
-* You can enable "Combo Stacking" in Gameplay Options. This causes the combo sprites to just be one sprite with an animation rather than sprites spawning each note hit.
-
+## Pull requests are always welcome
 
 #### Psych Engine by ShadowMario, Friday Night Funkin' by ninjamuffin99
