@@ -27,7 +27,7 @@ call haxelib install flixel-tools       1.5.1  --quiet --always --skip-dependenc
 call haxelib install hscript            2.7.0  --quiet --always --skip-dependencies
 call haxelib install hxcpp-debug-server 1.2.4  --quiet --always --skip-dependencies
 call haxelib install hxdiscord_rpc      1.3.0  --quiet --always --skip-dependencies
-call haxelib install hxvlc              2.2.6  --quiet --always --skip-dependencies
+call haxelib install hxvlc              2.3.0  --quiet --always --skip-dependencies
 call haxelib install tink_core          1.26.0 --quiet --always --skip-dependencies
 call haxelib install tjson              1.4.0  --quiet --always --skip-dependencies
 call haxelib install thx.core           0.44.0 --quiet --always --skip-dependencies
