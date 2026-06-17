@@ -28,7 +28,7 @@ Project version bumped: **1.0.4 → 1.1.1**
 | `hscript`            | (transitive)       | 2.7.0           | Still a transitive dep; no longer the script interpreter                                        |
 | `tjson`              | 1.4.0              | 1.4.0           | unchanged                                                                                      |
 | `hxdiscord_rpc`      | 1.2.4              | **1.3.0**       | Minor upgrade                                                                                  |
-| `hxvlc`              | 2.0.1              | **2.2.6**       | Patch upgrades                                                                                 |
+| `hxvlc`              | 2.0.1              | **2.3.0**       | Patch upgrades                                                                                 |
 | `hxcpp`              | 4.3.2  | **git (HEAD)**  | Switched to git source as release `hxcpp 4.3.2` is very old; built from source in setup        |
 | `tink_core`          | (transitive)       | **1.26.0**      | New explicit pin (strict requirement of `grig.audio`)                                          |
 | `thx.core`           | (transitive)       | **0.44.0**      | New explicit pin                                                                     |
