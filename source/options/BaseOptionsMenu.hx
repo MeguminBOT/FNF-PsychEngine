@@ -99,6 +99,11 @@ class BaseOptionsMenu extends MusicBeatSubstate {
 
 		changeSelection();
 		reloadCheckboxes();
+
+		#if mobile
+		// FULL: up/down to select, left/right to change values, A/B accept/back.
+		addTouchPad('FULL', 'A_B');
+		#end
 	}
 
 	public function addOption(option:Option) {

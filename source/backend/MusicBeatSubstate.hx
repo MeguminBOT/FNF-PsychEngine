@@ -1,14 +1,95 @@
 package backend;
 
 import flixel.FlxSubState;
+#if mobile
+import flixel.FlxCamera;
+import flixel.FlxG;
+import mobile.input.TouchPad;
+import mobile.input.Hitbox;
+#end
 
 class MusicBeatSubstate extends FlxSubState {
 	// The mod folder a scripted substate was loaded from (null for built-in ones).
 	// Set by scripting.ScriptedStates; used for auto mod-scoping of asset lookups.
 	public var scriptOwnerMod:String = null;
 
+	#if mobile
+	public var touchPad:TouchPad;
+	public var hitbox:Hitbox;
+	public var mobileControlsCamera:FlxCamera;
+
+	// Scripted substates get a default pad once (after their create runs) if they
+	// never added their own, so plain controls.ACCEPT/BACK/UI_* work on touch.
+	var defaultTouchPadTried:Bool = false;
+	#end
+
 	public function new() {
 		super();
+	}
+
+	#if mobile
+	public function addTouchPad(dpadMode:String = 'FULL', actionMode:String = 'A_B'):Void {
+		removeTouchPad();
+		if (mobileControlsCamera == null) {
+			mobileControlsCamera = new FlxCamera();
+			mobileControlsCamera.bgColor.alpha = 0;
+			FlxG.cameras.add(mobileControlsCamera, false);
+		}
+		touchPad = new TouchPad(dpadMode, actionMode);
+		touchPad.cameras = [mobileControlsCamera];
+		for (btn in touchPad.buttons) btn.cameras = [mobileControlsCamera];
+		final a:Float = ClientPrefs.data.controlsAlpha;
+		for (btn in touchPad.buttons) btn.idleAlpha = a;
+		add(touchPad);
+		TouchPad.current = touchPad;
+	}
+
+	public function removeTouchPad():Void {
+		if (touchPad != null) {
+			remove(touchPad, true);
+			touchPad.destroy();
+			touchPad = null;
+		}
+	}
+
+	public function addHitbox(keyCount:Int):Void {
+		removeHitbox();
+		if (mobileControlsCamera == null) {
+			mobileControlsCamera = new FlxCamera();
+			mobileControlsCamera.bgColor.alpha = 0;
+			FlxG.cameras.add(mobileControlsCamera, false);
+		}
+		hitbox = new Hitbox(keyCount);
+		hitbox.cameras = [mobileControlsCamera];
+		for (btn in hitbox.buttons) btn.cameras = [mobileControlsCamera];
+		add(hitbox);
+	}
+
+	public function removeHitbox():Void {
+		if (hitbox != null) {
+			remove(hitbox, true);
+			hitbox.destroy();
+			hitbox = null;
+		}
+	}
+
+	override public function destroy():Void {
+		removeTouchPad();
+		removeHitbox();
+		if (mobileControlsCamera != null) {
+			FlxG.cameras.remove(mobileControlsCamera, true);
+			mobileControlsCamera = null;
+		}
+		super.destroy();
+	}
+	#end
+
+	public function touchPadJustPressed(tag:String):Bool {
+		#if mobile return touchPad != null && touchPad.buttonJustPressed(tag); #else return false; #end
+	}
+
+	public function touchPadPressed(tag:String):Bool {
+		#if mobile return touchPad != null && touchPad.buttonPressed(tag); #else return false; #end
 	}
 
 	private var curSection:Int = 0;
@@ -34,6 +115,26 @@ class MusicBeatSubstate extends FlxSubState {
 		return Controls.instance;
 
 	override function update(elapsed:Float) {
+		#if (mobile && HSCRIPT_ALLOWED)
+		if (!defaultTouchPadTried && touchPad == null && hitbox == null && (this is insanity.IScripted)) {
+			defaultTouchPadTried = true;
+			if (!Mods.isNativeMobile())
+				addTouchPad('FULL', 'A_B');
+		}
+		#end
+
+		#if mobile
+		if (touchPad != null)
+			TouchPad.current = touchPad;
+		if (mobileControlsCamera != null) {
+			final list = FlxG.cameras.list;
+			if (list.length > 0 && list[list.length - 1] != mobileControlsCamera) {
+				FlxG.cameras.remove(mobileControlsCamera, false);
+				FlxG.cameras.add(mobileControlsCamera, false);
+			}
+		}
+		#end
+
 		// everyStep();
 		if (!persistentUpdate)
 			MusicBeatState.timePassedOnState += elapsed;

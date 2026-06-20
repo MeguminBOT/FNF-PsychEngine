@@ -30,6 +30,11 @@ class ErrorState extends MusicBeatState {
 		errorText.screenCenter();
 		add(errorText);
 		super.create();
+
+		#if mobile
+		// A continues (accept), B goes back -- both only act if a callback was given.
+		addTouchPad('NONE', 'A_B');
+		#end
 	}
 
 	override function update(elapsed:Float) {

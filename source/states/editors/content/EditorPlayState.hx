@@ -156,6 +156,11 @@ class EditorPlayState extends MusicBeatSubstate {
 		super.create();
 
 		cameras = [FlxG.cameras.list[FlxG.cameras.list.length - 1]];
+
+		#if mobile
+		addHitbox(totalColumns);
+		addTouchPad('NONE', 'B'); // B exits the playtest (see controls.BACK below)
+		#end
 	}
 
 	override function update(elapsed:Float) {
@@ -708,6 +713,19 @@ class EditorPlayState extends MusicBeatSubstate {
 			pressArray.push(controls.justPressed(key));
 			releaseArray.push(controls.justReleased(key));
 		}
+
+		#if mobile
+		// On-screen lanes feed the same hit/release path (no key events on touch).
+		if (hitbox != null) {
+			for (i in 0...keysArray.length) {
+				if (i >= hitbox.buttons.length) break;
+				final btn = hitbox.buttons[i];
+				if (btn.pressed) holdArray[i] = true;
+				if (btn.justPressed) keyPressed(i);
+				if (btn.justReleased) keyReleased(i);
+			}
+		}
+		#end
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
 		if (controls.controllerMode && pressArray.contains(true))

@@ -48,12 +48,28 @@ class FlashingState extends MusicBeatState {
 			return;
 		}
 		var back:Bool = controls.BACK;
+		var accept:Bool = controls.ACCEPT;
+
+		#if FLX_MOUSE
+		if (FlxG.mouse.justPressed) {
+			if (FlxG.mouse.overlaps(texts.members[1])) {
+				isYes = true;
+				updateItems();
+				accept = true;
+			} else if (FlxG.mouse.overlaps(texts.members[2])) {
+				isYes = false;
+				updateItems();
+				accept = true;
+			}
+		}
+		#end
+
 		if (controls.UI_LEFT_P || controls.UI_RIGHT_P) {
 			FlxG.sound.play(Paths.sound("scrollMenu"), 0.7);
 			isYes = !isYes;
 			updateItems();
 		}
-		if (controls.ACCEPT || back) {
+		if (accept || back) {
 			leftState = true;
 			FlxTransitionableState.skipNextTransIn = true;
 			FlxTransitionableState.skipNextTransOut = true;

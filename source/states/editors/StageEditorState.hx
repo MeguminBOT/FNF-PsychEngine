@@ -105,6 +105,10 @@ class StageEditorState extends MusicBeatState implements PsychUIEventHandler.Psy
 		animationEditor = new StageEditorAnimationSubstate();
 
 		super.create();
+
+		#if mobile
+		addTouchPad('NONE', 'B'); // B exits to the editor menu (see ESCAPE handler)
+		#end
 	}
 
 	function loadJsonAssetDirectory() {
@@ -1282,7 +1286,7 @@ class StageEditorState extends MusicBeatState implements PsychUIEventHandler.Psy
 		if (PsychUIInputText.focusOn != null)
 			return;
 
-		if (FlxG.keys.justPressed.ESCAPE) {
+		if (FlxG.keys.justPressed.ESCAPE || controls.BACK) {
 			if (!unsavedProgress) {
 				MusicBeatState.switchState(new states.editors.MasterEditorMenu());
 				FlxG.sound.playMusic(Paths.music('freakyMenu'));

@@ -143,6 +143,12 @@ class Controls {
 			controllerMode = false;
 			return true;
 		}
+		#if android
+		if (key == 'back' && FlxG.android.justPressed.BACK) return true;
+		#end
+		#if mobile
+		if (touchJustPressed(key)) return true;
+		#end
 		return _myGamepadJustPressed(gamepadBinds[key]);
 	}
 
@@ -152,6 +158,9 @@ class Controls {
 			controllerMode = false;
 			return true;
 		}
+		#if mobile
+		if (touchPressed(key)) return true;
+		#end
 		return _myGamepadPressed(gamepadBinds[key]);
 	}
 
@@ -161,8 +170,36 @@ class Controls {
 			controllerMode = false;
 			return true;
 		}
+		#if mobile
+		if (touchJustReleased(key)) return true;
+		#end
 		return _myGamepadJustReleased(gamepadBinds[key]);
 	}
+
+	#if mobile
+	// OR-in the active on-screen virtual gamepad so all existing control checks
+	// (controls.UI_UP, ACCEPT, BACK, ...) work on touch without per-call-site changes.
+	inline function touchTag(key:String):String
+		return mobile.input.TouchPad.controlToTag.get(key);
+
+	function touchJustPressed(key:String):Bool {
+		final pad = mobile.input.TouchPad.current;
+		final tag = touchTag(key);
+		return pad != null && tag != null && pad.buttonJustPressed(tag);
+	}
+
+	function touchPressed(key:String):Bool {
+		final pad = mobile.input.TouchPad.current;
+		final tag = touchTag(key);
+		return pad != null && tag != null && pad.buttonPressed(tag);
+	}
+
+	function touchJustReleased(key:String):Bool {
+		final pad = mobile.input.TouchPad.current;
+		final tag = touchTag(key);
+		return pad != null && tag != null && pad.buttonJustReleased(tag);
+	}
+	#end
 
 	public var controllerMode:Bool = false;
 

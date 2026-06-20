@@ -62,6 +62,13 @@ class ControlsSubState extends MusicBeatSubstate {
 	public function new() {
 		super();
 
+		#if mobile
+		// This menu reads FlxG.keys directly, so its update() also checks these
+		// buttons explicitly. C swaps keyboard/gamepad mode. (Rebinding keyboard
+		// keys still needs a hardware keyboard.)
+		addTouchPad('FULL', 'A_B_C');
+		#end
+
 		#if DISCORD_ALLOWED
 		DiscordClient.changePresence("Controls Menu", null);
 		#end
@@ -283,13 +290,25 @@ class ControlsSubState extends MusicBeatSubstate {
 		}
 
 		if (!binding) {
-			if (FlxG.keys.justPressed.ESCAPE || FlxG.gamepads.anyJustPressed(B)) {
+			#if mobile
+			final tpUp = touchPad != null && touchPad.buttonJustPressed('UP');
+			final tpDown = touchPad != null && touchPad.buttonJustPressed('DOWN');
+			final tpLeftRight = touchPad != null && (touchPad.buttonJustPressed('LEFT') || touchPad.buttonJustPressed('RIGHT'));
+			final tpAccept = touchPad != null && touchPad.buttonJustPressed('A');
+			final tpBack = touchPad != null && touchPad.buttonJustPressed('B');
+			final tpSwap = touchPad != null && touchPad.buttonJustPressed('C');
+			#else
+			final tpUp = false, tpDown = false, tpLeftRight = false, tpAccept = false, tpBack = false, tpSwap = false;
+			#end
+
+			if (FlxG.keys.justPressed.ESCAPE || FlxG.gamepads.anyJustPressed(B) || tpBack) {
 				close();
 				return;
 			}
 			if (FlxG.keys.justPressed.CONTROL
 				|| FlxG.gamepads.anyJustPressed(LEFT_SHOULDER)
-				|| FlxG.gamepads.anyJustPressed(RIGHT_SHOULDER))
+				|| FlxG.gamepads.anyJustPressed(RIGHT_SHOULDER)
+				|| tpSwap)
 				swapMode();
 
 			if (FlxG.keys.justPressed.LEFT
@@ -297,17 +316,19 @@ class ControlsSubState extends MusicBeatSubstate {
 				|| FlxG.gamepads.anyJustPressed(DPAD_LEFT)
 				|| FlxG.gamepads.anyJustPressed(DPAD_RIGHT)
 				|| FlxG.gamepads.anyJustPressed(LEFT_STICK_DIGITAL_LEFT)
-				|| FlxG.gamepads.anyJustPressed(LEFT_STICK_DIGITAL_RIGHT))
+				|| FlxG.gamepads.anyJustPressed(LEFT_STICK_DIGITAL_RIGHT)
+				|| tpLeftRight)
 				updateAlt(true);
 
-			if (FlxG.keys.justPressed.UP || FlxG.gamepads.anyJustPressed(DPAD_UP) || FlxG.gamepads.anyJustPressed(LEFT_STICK_DIGITAL_UP))
+			if (FlxG.keys.justPressed.UP || FlxG.gamepads.anyJustPressed(DPAD_UP) || FlxG.gamepads.anyJustPressed(LEFT_STICK_DIGITAL_UP) || tpUp)
 				updateText(-1);
 			else if (FlxG.keys.justPressed.DOWN
 				|| FlxG.gamepads.anyJustPressed(DPAD_DOWN)
-				|| FlxG.gamepads.anyJustPressed(LEFT_STICK_DIGITAL_DOWN))
+				|| FlxG.gamepads.anyJustPressed(LEFT_STICK_DIGITAL_DOWN)
+				|| tpDown)
 				updateText(1);
 
-			if (FlxG.keys.justPressed.ENTER || FlxG.gamepads.anyJustPressed(START) || FlxG.gamepads.anyJustPressed(A)) {
+			if (FlxG.keys.justPressed.ENTER || FlxG.gamepads.anyJustPressed(START) || FlxG.gamepads.anyJustPressed(A) || tpAccept) {
 				if (options[curOptions[curSelected]][1] != defaultKey) {
 					bindingBlack = new FlxSprite().makeGraphic(1, 1, /*FlxColor.BLACK*/ FlxColor.WHITE);
 					bindingBlack.scale.set(FlxG.width, FlxG.height);

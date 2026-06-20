@@ -163,6 +163,10 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 			Paths.clearUnusedMemory();
 
 		super.create();
+
+		#if mobile
+		addTouchPad('NONE', 'B'); // B exits to the editor menu (see ESCAPE handler)
+		#end
 	}
 
 	function addHelpScreen() {
@@ -1062,7 +1066,7 @@ class CharacterEditorState extends MusicBeatState implements PsychUIEventHandler
 		if (FlxG.keys.justPressed.F1 || (helpBg.visible && FlxG.keys.justPressed.ESCAPE)) {
 			helpBg.visible = !helpBg.visible;
 			helpTexts.visible = helpBg.visible;
-		} else if (FlxG.keys.justPressed.ESCAPE) {
+		} else if (FlxG.keys.justPressed.ESCAPE || controls.BACK) {
 			if (!_goToPlayState) {
 				if (!unsavedProgress) {
 					MusicBeatState.switchState(new states.editors.MasterEditorMenu());

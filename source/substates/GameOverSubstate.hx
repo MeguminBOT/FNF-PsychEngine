@@ -132,6 +132,11 @@ class GameOverSubstate extends MusicBeatSubstate {
 		}
 
 		super.create();
+
+		#if mobile
+		// Retry (A) / quit to menu (B); no directional navigation here.
+		addTouchPad('NONE', 'A_B');
+		#end
 	}
 
 	override function update(elapsed:Float) {

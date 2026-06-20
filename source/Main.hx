@@ -1,7 +1,10 @@
 package;
 
+#if mobile
+import mobile.backend.StorageUtil;
+#end
 #if android
-import android.content.Context;
+import extension.haptics.Haptic;
 #end
 import debug.FPSCounter;
 import flixel.graphics.FlxGraphic;
@@ -60,11 +63,16 @@ class Main extends Sprite {
 		backend.Native.fixScaling();
 		#end
 
-		// Credits to MAJigsaw77 (he's the og author for this code)
+		// Mobile storage: point the engine at a public, file-manager-browsable folder
+		// (/storage/emulated/0/PsychEngine) so users can add mods/read saves freely.
+		// Credits to MAJigsaw77 (he's the og author for the original android code)
+		#if mobile
 		#if android
-		Sys.setCwd(Path.addTrailingSlash(Context.getExternalFilesDir()));
-		#elseif ios
-		Sys.setCwd(lime.system.System.applicationStorageDirectory);
+		StorageUtil.requestPermissions();
+		Haptic.initialize();
+		#end
+		StorageUtil.prepareDirectories();
+		Sys.setCwd(StorageUtil.getStorageDirectory());
 		#end
 		#if VIDEOS_ALLOWED
 		hxvlc.util.Handle.init(#if (hxvlc >= "1.8.0") ['--no-lua'] #end);
@@ -89,6 +97,11 @@ class Main extends Sprite {
 		flixel.FlxSprite.defaultAntialiasing = ClientPrefs.data.antialiasing;
 		#if ACHIEVEMENTS_ALLOWED Achievements.load(); #end
 		addChild(new FlxGame(game.width, game.height, game.initialState, game.framerate, game.framerate, game.skipSplash, game.startFullscreen));
+
+		#if android
+		// Without this the OS handles Back (minimise/close) before we can read it.
+		FlxG.signals.postGameStart.addOnce(() -> FlxG.android.preventDefaultKeys = [flixel.input.android.FlxAndroidKey.BACK]);
+		#end
 
 		#if !mobile
 		fpsVar = new FPSCounter(10, 3, 0xFFFFFF);
@@ -212,7 +225,15 @@ class Main extends Sprite {
 		Sys.println(errMsg);
 		Sys.println("Crash dump saved in " + Path.normalize(path));
 
+		#if mobile
+		// Desktop-style modal alert isn't reliable on mobile; the saved log file (and
+		// logcat via the println above) is what matters there.
+		#if android
+		try extension.androidtools.widget.Toast.makeText('Crashed -- log saved to crash/', extension.androidtools.widget.Toast.LENGTH_LONG) catch (_:Dynamic) {}
+		#end
+		#else
 		Application.current.window.alert(errMsg, "Error!");
+		#end
 		#if DISCORD_ALLOWED
 		DiscordClient.shutdown();
 		#end

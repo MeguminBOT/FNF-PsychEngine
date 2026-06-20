@@ -419,9 +419,35 @@ class PsychUIInputText extends FlxSpriteGroup {
 			if (focusOn.unfocus != null)
 				focusOn.unfocus();
 			focusOn.resetCaret();
+			#if android focusOn.setSoftKeyboard(false); #end
 		}
-		return (focusOn = v);
+		focusOn = v;
+		#if android if (v != null) v.setSoftKeyboard(true); #end
+		return v;
 	}
+
+	#if android
+	function setSoftKeyboard(show:Bool):Void {
+		var window = lime.app.Application.current.window;
+		if (window == null)
+			return;
+		if (show) {
+			window.onTextInput.add(onSoftInput);
+			window.textInputEnabled = true; // pops up the on-screen keyboard
+		} else {
+			window.onTextInput.remove(onSoftInput);
+			window.textInputEnabled = false;
+		}
+	}
+
+	function onSoftInput(input:String):Void {
+		if (focusOn != this || input == null || input.length < 1)
+			return;
+		for (i in 0...input.length)
+			_typeLetter(input.charCodeAt(i));
+		updateCaret();
+	}
+	#end
 
 	override function update(elapsed:Float) {
 		super.update(elapsed);

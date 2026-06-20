@@ -121,6 +121,10 @@ class ModSecuritySubstate extends MusicBeatSubstate {
 	override function create() {
 		super.create();
 
+		#if mobile
+		addTouchPad('FULL', 'A_B');
+		#end
+
 		// Full-screen dimmer
 		bg = new FlxSprite().makeGraphic(1, 1, FlxColor.BLACK);
 		bg.scale.set(FlxG.width, FlxG.height);

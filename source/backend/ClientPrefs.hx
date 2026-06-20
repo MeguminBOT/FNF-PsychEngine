@@ -48,6 +48,9 @@ import states.TitleState;
 	public var pauseMusic:String = 'Tea Time';
 	public var checkForUpdates:Bool = true;
 	public var comboStacking:Bool = true;
+	// Mobile on-screen controls
+	public var controlsAlpha:Float = 0.6;
+	public var vibration:Bool = true;
 	public var gameplaySettings:Map<String, Dynamic> = [
 		'scrollspeed' => 1.0,
 		'scrolltype' => 'multiplicative',

@@ -285,6 +285,11 @@ class TitleState extends MusicBeatState {
 			swagGoodArray.push(i.split('--'));
 		}
 
+		// Never return empty: FlxG.random.getObject([]) is null, and beatHit() would
+		// then null-deref curWacky[0]. Fall back to a built-in line.
+		if (swagGoodArray.length == 0)
+			swagGoodArray.push(['Psych Engine', 'rewritten']);
+
 		return swagGoodArray;
 	}
 

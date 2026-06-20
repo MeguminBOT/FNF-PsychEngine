@@ -16,6 +16,10 @@ class OutdatedSubState extends MusicBeatSubstate {
 	override function create() {
 		super.create();
 
+		#if mobile
+		addTouchPad('NONE', 'A_B');
+		#end
+
 		bg = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, FlxColor.BLACK);
 		bg.scrollFactor.set();
 		bg.alpha = 0.0;

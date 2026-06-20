@@ -158,6 +158,10 @@ class PauseSubState extends MusicBeatSubstate {
 		cameras = [FlxG.cameras.list[FlxG.cameras.list.length - 1]];
 
 		super.create();
+
+		#if mobile
+		addTouchPad('UP_DOWN', 'A_B');
+		#end
 	}
 
 	function tryLoadModSettings() {

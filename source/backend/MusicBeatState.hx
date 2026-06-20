@@ -3,8 +3,27 @@ package backend;
 import flixel.FlxState;
 import flixel.group.FlxGroup.FlxTypedGroup;
 import backend.PsychCamera;
+#if mobile
+import flixel.FlxCamera;
+import mobile.input.TouchPad;
+import mobile.input.Hitbox;
+#end
 
 class MusicBeatState extends FlxState {
+	#if mobile
+	// On-screen controls for this state. `touchPad` drives menu navigation (read by
+	// backend.Controls); `hitbox` drives gameplay lanes (polled by PlayState). Both
+	// render on a dedicated overlay camera so they ignore game-camera zoom/scroll.
+	public var touchPad:TouchPad;
+	public var hitbox:Hitbox;
+	public var mobileControlsCamera:FlxCamera;
+
+	// Scripted states use plain controls.ACCEPT/BACK/UI_* with no android-specific
+	// calls, so give them a default pad once (after their create runs) if they never
+	// added their own pad or hitbox. Set true once attempted, so we don't re-add.
+	var defaultTouchPadTried:Bool = false;
+	#end
+
 	private var curSection:Int = 0;
 	private var stepsToDo:Int = 0;
 
@@ -96,10 +115,154 @@ class MusicBeatState extends FlxState {
 		return camera;
 	}
 
+	#if mobile
+	function initMobileControlsCamera():Void {
+		if (mobileControlsCamera != null)
+			return;
+		mobileControlsCamera = new FlxCamera();
+		mobileControlsCamera.bgColor.alpha = 0;
+		FlxG.cameras.add(mobileControlsCamera, false);
+	}
+
+	/**
+	 * Adds the menu virtual gamepad. `dpadMode` ∈ FULL/UP_DOWN/LEFT_RIGHT/UP_LEFT_RIGHT/NONE,
+	 * `actionMode` ∈ A_B/A/NONE. Alpha follows ClientPrefs.data.controlsAlpha.
+	 */
+	public function addTouchPad(dpadMode:String = 'FULL', actionMode:String = 'A_B'):Void {
+		removeTouchPad();
+		initMobileControlsCamera();
+		touchPad = new TouchPad(dpadMode, actionMode);
+		touchPad.cameras = [mobileControlsCamera];
+		for (btn in touchPad.buttons) btn.cameras = [mobileControlsCamera];
+		applyControlsAlpha(touchPad);
+		add(touchPad);
+		TouchPad.current = touchPad;
+	}
+
+	public function removeTouchPad():Void {
+		if (touchPad != null) {
+			remove(touchPad, true);
+			touchPad.destroy();
+			touchPad = null;
+		}
+	}
+
+	/** Adds the gameplay lane overlay for `keyCount` columns. */
+	public function addHitbox(keyCount:Int):Void {
+		removeHitbox();
+		initMobileControlsCamera();
+		hitbox = new Hitbox(keyCount);
+		hitbox.cameras = [mobileControlsCamera];
+		for (btn in hitbox.buttons) btn.cameras = [mobileControlsCamera];
+		add(hitbox);
+	}
+
+	public function removeHitbox():Void {
+		if (hitbox != null) {
+			remove(hitbox, true);
+			hitbox.destroy();
+			hitbox = null;
+		}
+	}
+
+	function applyControlsAlpha(pad:TouchPad):Void {
+		final a:Float = ClientPrefs.data.controlsAlpha;
+		for (btn in pad.buttons) btn.idleAlpha = a;
+	}
+
+	// Keep the on-screen controls above any HUD cameras a state adds after
+	// addTouchPad/addHitbox, so callers can add the pad anywhere in create().
+	// (see below for the reorder; the input helpers are declared outside #if mobile.)
+	#end
+
+	// Touch-pad query helpers usable WITHOUT #if guards at call sites (handy for
+	// states that read FlxG.keys directly). Always present; return false off-mobile.
+	public function touchPadJustPressed(tag:String):Bool {
+		#if mobile return touchPad != null && touchPad.buttonJustPressed(tag); #else return false; #end
+	}
+
+	public function touchPadPressed(tag:String):Bool {
+		#if mobile return touchPad != null && touchPad.buttonPressed(tag); #else return false; #end
+	}
+
+	// Index of the visible group item under a just-started click/tap, else -1.
+	// (Touch drives FlxG.mouse on Android, so one path serves click and tap.)
+	public function getTappedMenuItem<T:flixel.FlxBasic>(group:flixel.group.FlxTypedGroup<T>, ?cam:flixel.FlxCamera):Int {
+		#if FLX_MOUSE
+		if (group == null || !FlxG.mouse.justPressed)
+			return -1;
+		for (i in 0...group.length) {
+			final m = group.members[i];
+			if (m != null && m.exists && m.visible && FlxG.mouse.overlaps(m, cam))
+				return i;
+		}
+		#end
+		return -1;
+	}
+
+	// Extra on-screen action buttons (left column), for state-specific functions that
+	// have no place on the d-pad (sort/group/favorite, etc). Returns false off-mobile.
+	public function actionButtonJustPressed(tag:String):Bool {
+		#if mobile return actionButtons != null && actionButtons.exists(tag) && actionButtons.get(tag).justPressed; #else return false; #end
+	}
+
+	#if mobile
+	public var actionButtons:Map<String, mobile.objects.TouchButton>;
+
+	// defs: each entry is [tag, label]. Stacked top-down on the left edge.
+	public function addActionButtons(defs:Array<Array<String>>):Void {
+		initMobileControlsCamera();
+		if (actionButtons == null) actionButtons = new Map();
+		final size:Int = 84;
+		final pad:Int = 12;
+		var ty:Float = pad;
+		for (def in defs) {
+			var btn = new mobile.objects.TouchButton(pad, ty, def[0]);
+			btn.makeGraphic(size, size, 0xFF3B3B6B);
+			btn.idleAlpha = ClientPrefs.data.controlsAlpha;
+			btn.cameras = [mobileControlsCamera];
+			add(btn);
+			var lbl = new flixel.text.FlxText(pad, ty + size / 2 - 14, size, def[1], 24);
+			lbl.setFormat(null, 24, flixel.util.FlxColor.WHITE, CENTER);
+			lbl.scrollFactor.set();
+			lbl.cameras = [mobileControlsCamera];
+			add(lbl);
+			actionButtons.set(def[0], btn);
+			ty += size + pad;
+		}
+	}
+
+	// Cheap: only reorders on the frame(s) where it isn't already on top.
+	function keepControlsCameraOnTop():Void {
+		if (mobileControlsCamera == null)
+			return;
+		final list = FlxG.cameras.list;
+		if (list.length == 0 || list[list.length - 1] == mobileControlsCamera)
+			return;
+		FlxG.cameras.remove(mobileControlsCamera, false);
+		FlxG.cameras.add(mobileControlsCamera, false);
+	}
+	#end
+
 	public static var timePassedOnState:Float = 0;
 	private static var _lastSavedFullscreen:Bool = false;
 
 	override function update(elapsed:Float) {
+		#if (mobile && HSCRIPT_ALLOWED)
+		if (!defaultTouchPadTried && touchPad == null && hitbox == null && (this is insanity.IScripted)) {
+			defaultTouchPadTried = true;
+			if (!Mods.isNativeMobile())
+				addTouchPad('FULL', 'A_B');
+		}
+		#end
+
+		#if mobile
+		// The topmost updating state owns menu touch input; states without a pad
+		// clear it so stale presses can't leak in (see TouchPad.current).
+		TouchPad.current = touchPad;
+		keepControlsCameraOnTop();
+		#end
+
 		// everyStep();
 		var oldStep:Int = curStep;
 		timePassedOnState += elapsed;

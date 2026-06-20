@@ -133,6 +133,10 @@ class MainMenuState extends MusicBeatState {
 		#end
 
 		FlxG.camera.follow(camFollow, null, 0.15);
+
+		#if mobile
+		addActionButtons([['EDITORS', 'EDIT']]);
+		#end
 	}
 
 	function createMenuItem(name:String, x:Float, y:Float):FlxSprite {
@@ -326,6 +330,12 @@ class MainMenuState extends MusicBeatState {
 			if (controls.justPressed('debug_1')) {
 				selectedSomethin = true;
 				FlxG.mouse.visible = false;
+				MusicBeatState.switchState(new MasterEditorMenu());
+			}
+			#end
+			#if mobile
+			if (actionButtonJustPressed('EDITORS')) {
+				selectedSomethin = true;
 				MusicBeatState.switchState(new MasterEditorMenu());
 			}
 			#end

@@ -97,6 +97,18 @@
 			"url": "https://github.com/MAJigsaw77/hxluajit-wrapper"
 		},
 		{
+			"name": "extension-androidtools",
+			"type": "git",
+			"dir": null,
+			"url": "https://github.com/MAJigsaw77/extension-androidtools"
+		},
+		{
+			"name": "extension-haptics",
+			"type": "git",
+			"dir": null,
+			"url": "https://github.com/MAJigsaw77/extension-haptics"
+		},
+		{
 			"name": "tink_core",
 			"type": "haxelib",
 			"version": "2.1.1",

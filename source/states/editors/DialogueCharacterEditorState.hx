@@ -132,6 +132,10 @@ class DialogueCharacterEditorState extends MusicBeatState implements PsychUIEven
 		updateCharTypeBox();
 
 		super.create();
+
+		#if mobile
+		addTouchPad('NONE', 'B'); // B exits to the editor menu (see ESCAPE handler)
+		#end
 	}
 
 	var UI_typebox:PsychUIBox;
@@ -633,7 +637,7 @@ class DialogueCharacterEditorState extends MusicBeatState implements PsychUIEven
 				}
 			}
 
-			if (FlxG.keys.justPressed.ESCAPE) {
+			if (FlxG.keys.justPressed.ESCAPE || controls.BACK) {
 				if (!unsavedProgress) {
 					MusicBeatState.switchState(new states.editors.MasterEditorMenu());
 					FlxG.sound.playMusic(Paths.music('freakyMenu'));

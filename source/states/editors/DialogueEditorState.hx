@@ -80,6 +80,10 @@ class DialogueEditorState extends MusicBeatState implements PsychUIEventHandler.
 		add(daText);
 		changeText();
 		super.create();
+
+		#if mobile
+		addTouchPad('NONE', 'B'); // B exits to the editor menu (see ESCAPE handler)
+		#end
 	}
 
 	var UI_box:PsychUIBox;
@@ -320,7 +324,7 @@ class DialogueEditorState extends MusicBeatState implements PsychUIEventHandler.
 			if (FlxG.keys.justPressed.SPACE) {
 				reloadText(false);
 			}
-			if (FlxG.keys.justPressed.ESCAPE) {
+			if (FlxG.keys.justPressed.ESCAPE || controls.BACK) {
 				if (!unsavedProgress) {
 					MusicBeatState.switchState(new states.editors.MasterEditorMenu());
 					FlxG.sound.playMusic(Paths.music('freakyMenu'));

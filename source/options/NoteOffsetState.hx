@@ -166,6 +166,11 @@ class NoteOffsetState extends MusicBeatState {
 		FlxG.sound.playMusic(Paths.music('offsetSong'), 1, true);
 
 		super.create();
+
+		#if mobile
+		// LEFT/RIGHT adjust, A confirm, B back, C reset (controls.RESET).
+		addTouchPad('LEFT_RIGHT', 'A_B_C');
+		#end
 	}
 
 	var holdTime:Float = 0;

@@ -59,6 +59,10 @@ class MenuCharacterEditorState extends MusicBeatState implements PsychUIEventHan
 		updateCharacters();
 
 		super.create();
+
+		#if mobile
+		addTouchPad('NONE', 'B'); // B exits to the editor menu (see ESCAPE handler)
+		#end
 	}
 
 	var UI_typebox:PsychUIBox;
@@ -206,7 +210,7 @@ class MenuCharacterEditorState extends MusicBeatState implements PsychUIEventHan
 	override function update(elapsed:Float) {
 		if (PsychUIInputText.focusOn == null) {
 			ClientPrefs.toggleVolumeKeys(true);
-			if (FlxG.keys.justPressed.ESCAPE) {
+			if (FlxG.keys.justPressed.ESCAPE || controls.BACK) {
 				if (!unsavedProgress) {
 					MusicBeatState.switchState(new states.editors.MasterEditorMenu());
 					FlxG.sound.playMusic(Paths.music('freakyMenu'));

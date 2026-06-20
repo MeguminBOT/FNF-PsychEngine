@@ -48,6 +48,10 @@ class NotesColorSubState extends MusicBeatSubstate {
 	public function new() {
 		super();
 
+		#if mobile
+		addTouchPad('FULL', 'A_B_C');
+		#end
+
 		#if DISCORD_ALLOWED
 		DiscordClient.changePresence("Note Colors Menu", null);
 		#end

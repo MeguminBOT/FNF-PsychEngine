@@ -25,3 +25,8 @@ vs_Community.exe
 !.vscode/extensions.json
 art/build_html.bat
 art/build_html-debug.bat
+
+# Android release signing (keep private). Key lives outside the repo at
+# Q:/Android/signing/; signing.local.xml holds the <certificate> referencing it.
+release.keystore
+signing.local.xml

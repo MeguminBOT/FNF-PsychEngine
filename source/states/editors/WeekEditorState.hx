@@ -97,6 +97,10 @@ class WeekEditorState extends MusicBeatState implements PsychUIEventHandler.Psyc
 		FlxG.mouse.visible = true;
 
 		super.create();
+
+		#if mobile
+		addTouchPad('NONE', 'B'); // B exits to the editor menu (see ESCAPE handler)
+		#end
 	}
 
 	var UI_box:PsychUIBox;
@@ -391,7 +395,7 @@ class WeekEditorState extends MusicBeatState implements PsychUIEventHandler.Psyc
 
 		if (PsychUIInputText.focusOn == null) {
 			ClientPrefs.toggleVolumeKeys(true);
-			if (FlxG.keys.justPressed.ESCAPE) {
+			if (FlxG.keys.justPressed.ESCAPE || controls.BACK) {
 				if (!unsavedProgress) {
 					MusicBeatState.switchState(new MasterEditorMenu());
 					FlxG.sound.playMusic(Paths.music('freakyMenu'));
@@ -575,6 +579,10 @@ class WeekEditorFreeplayState extends MusicBeatState implements PsychUIEventHand
 		addEditorBox();
 		changeSelection();
 		super.create();
+
+		#if mobile
+		addTouchPad('NONE', 'B'); // B exits to the editor menu (see ESCAPE handler)
+		#end
 	}
 
 	var UI_box:PsychUIBox;
@@ -730,7 +738,7 @@ class WeekEditorFreeplayState extends MusicBeatState implements PsychUIEventHand
 			ClientPrefs.toggleVolumeKeys(false);
 		else {
 			ClientPrefs.toggleVolumeKeys(true);
-			if (FlxG.keys.justPressed.ESCAPE) {
+			if (FlxG.keys.justPressed.ESCAPE || controls.BACK) {
 				if (!WeekEditorState.unsavedProgress) {
 					MusicBeatState.switchState(new MasterEditorMenu());
 					FlxG.sound.playMusic(Paths.music('freakyMenu'));

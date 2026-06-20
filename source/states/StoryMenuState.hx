@@ -176,6 +176,10 @@ class StoryMenuState extends MusicBeatState {
 		changeDifficulty();
 
 		super.create();
+
+		#if mobile
+		addTouchPad('FULL', 'A_B');
+		#end
 	}
 
 	override function closeSubState() {

@@ -206,6 +206,11 @@ class FreeplayState extends MusicBeatState {
 		changeSelection();
 		updateTexts();
 		super.create();
+
+		#if mobile
+		addTouchPad('FULL', 'A_B');
+		addActionButtons([['SEARCH', 'SRCH'], ['SORT', 'SORT'], ['GROUPL', 'GRP-'], ['GROUPR', 'GRP+'], ['FAV', 'FAV']]);
+		#end
 	}
 
 	override function closeSubState() {
@@ -268,6 +273,13 @@ class FreeplayState extends MusicBeatState {
 		// move the selection (WASD would clash with the letters being typed).
 		if (searching) {
 			handleSearchInput();
+			#if android
+			if (controls.BACK) {
+				endSearch();
+				super.update(elapsed);
+				return;
+			}
+			#end
 			if (songs.length > 0) {
 				if (FlxG.keys.justPressed.DOWN)
 					changeSelection(1);
@@ -325,15 +337,15 @@ class FreeplayState extends MusicBeatState {
 				_updateSongLastDifficulty();
 			}
 
-			if (FlxG.keys.justPressed.TAB)
+			if (FlxG.keys.justPressed.TAB || actionButtonJustPressed('SEARCH'))
 				beginSearch();
-			else if (FlxG.keys.justPressed.T)
+			else if (FlxG.keys.justPressed.T || actionButtonJustPressed('SORT'))
 				cycleSort();
-			else if (FlxG.keys.justPressed.Q)
+			else if (FlxG.keys.justPressed.Q || actionButtonJustPressed('GROUPL'))
 				cycleGroup(-1);
-			else if (FlxG.keys.justPressed.E)
+			else if (FlxG.keys.justPressed.E || actionButtonJustPressed('GROUPR'))
 				cycleGroup(1);
-			else if (FlxG.keys.justPressed.F)
+			else if (FlxG.keys.justPressed.F || actionButtonJustPressed('FAV'))
 				toggleFavorite();
 		}
 
@@ -789,12 +801,38 @@ class FreeplayState extends MusicBeatState {
 		searching = true;
 		updateHeader();
 		FlxG.sound.play(Paths.sound('scrollMenu'), 0.5);
+		#if android
+		mobile.backend.SoftKeyboard.open(searchType, searchBackspace, endSearch);
+		#end
 	}
 
 	function endSearch() {
 		searching = false;
 		updateHeader();
+		#if android mobile.backend.SoftKeyboard.close(); #end
 	}
+
+	#if android
+	function searchType(input:String) {
+		searchQuery += input.toLowerCase();
+		applySearchChange();
+	}
+
+	function searchBackspace() {
+		if (searchQuery.length > 0) {
+			searchQuery = searchQuery.substr(0, searchQuery.length - 1);
+			applySearchChange();
+		}
+	}
+
+	function applySearchChange() {
+		var sel:SongMetadata = songs.length > 0 ? songs[curSelected] : null;
+		applyFilters();
+		rebuildSongList();
+		restoreSelection(sel);
+		updateHeader();
+	}
+	#end
 
 	function handleSearchInput() {
 		var k:Int = FlxG.keys.firstJustPressed();

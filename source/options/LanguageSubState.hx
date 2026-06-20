@@ -12,6 +12,10 @@ class LanguageSubState extends MusicBeatSubstate {
 	public function new() {
 		super();
 
+		#if mobile
+		addTouchPad('UP_DOWN', 'A_B');
+		#end
+
 		var bg = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
 		bg.color = 0xFFea71fd;
 		bg.antialiasing = ClientPrefs.data.antialiasing;

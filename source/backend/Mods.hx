@@ -322,6 +322,13 @@ class Mods {
 		return 'freakyMenu';
 	}
 
+	/** pack.json "nativeMobile": when true the mod handles its own mobile controls,
+	 *  so the engine must NOT auto-add a default touch pad to its scripted states. */
+	public static function isNativeMobile(?folder:String = null):Bool {
+		var pack:Dynamic = getPack(folder);
+		return pack != null && pack.nativeMobile == true;
+	}
+
 	/** A mod is launchable if it ships its entry state at states/<entry>.hx. */
 	public static function isLaunchable(?folder:String = null):Bool {
 		#if (MODS_ALLOWED && HSCRIPT_ALLOWED)

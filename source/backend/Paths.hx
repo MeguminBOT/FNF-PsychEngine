@@ -253,10 +253,17 @@ class Paths {
 	public static function cacheBitmap(key:String, ?parentFolder:String = null, ?bitmap:BitmapData, ?allowGPU:Bool = true):FlxGraphic {
 		if (bitmap == null) {
 			var file:String = getPath(key, IMAGE, parentFolder, true);
-			#if MODS_ALLOWED if (FileSystem.exists(file))
+			#if mobile
+			bitmap = mobile.backend.AssetUtil.getBitmap(file);
+			#elseif MODS_ALLOWED
+			if (FileSystem.exists(file))
 				bitmap = BitmapData.fromFile(file);
-			else #end if (OpenFlAssets.exists(file, IMAGE))
+			else if (OpenFlAssets.exists(file, IMAGE))
 				bitmap = OpenFlAssets.getBitmapData(file);
+			#else
+			if (OpenFlAssets.exists(file, IMAGE))
+				bitmap = OpenFlAssets.getBitmapData(file);
+			#end
 
 			if (bitmap == null) {
 				// trace('Bitmap not found: $file | key: $key');
@@ -433,18 +440,19 @@ class Paths {
 
 		// trace('precaching sound: $file');
 		if (!currentTrackedSounds.exists(file)) {
-			#if sys
-			if (FileSystem.exists(file))
-				currentTrackedSounds.set(file, Sound.fromFile(file));
-			#else
-			if (OpenFlAssets.exists(file, SOUND))
-				currentTrackedSounds.set(file, OpenFlAssets.getSound(file));
-			#end
-		else if (beepOnNull) {
-			trace('SOUND NOT FOUND: $key, PATH: $path');
-			FlxG.log.error('SOUND NOT FOUND: $key, PATH: $path');
-			return FlxAssets.getSound('flixel/sounds/beep');
-		}
+			// Mobile: AssetUtil tries the real file (mods) then the APK asset. (Kept off
+			// the FileAccessMacro's FileSystem.exists rewrite, which can't tell a bundled
+			// asset from a real file -- and Sound.fromFile only works on real files.)
+			var snd:Sound = #if mobile mobile.backend.AssetUtil.getSound(file)
+				#elseif sys (FileSystem.exists(file) ? Sound.fromFile(file) : null)
+				#else (OpenFlAssets.exists(file, SOUND) ? OpenFlAssets.getSound(file) : null) #end;
+			if (snd != null)
+				currentTrackedSounds.set(file, snd);
+			else if (beepOnNull) {
+				trace('SOUND NOT FOUND: $key, PATH: $path');
+				FlxG.log.error('SOUND NOT FOUND: $key, PATH: $path');
+				return FlxAssets.getSound('flixel/sounds/beep');
+			}
 		}
 		localTrackedAssets.push(file);
 		return currentTrackedSounds.get(file);

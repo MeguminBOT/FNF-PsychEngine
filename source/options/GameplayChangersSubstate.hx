@@ -79,6 +79,10 @@ class GameplayChangersSubstate extends MusicBeatSubstate {
 	public function new() {
 		super();
 
+		#if mobile
+		addTouchPad('FULL', 'A_B_C');
+		#end
+
 		var bg:FlxSprite = new FlxSprite().makeGraphic(FlxG.width, FlxG.height, FlxColor.BLACK);
 		bg.alpha = 0.6;
 		add(bg);

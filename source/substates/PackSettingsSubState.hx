@@ -94,6 +94,10 @@ class PackSettingsSubState extends MusicBeatSubstate {
 	override function create():Void {
 		super.create();
 
+		#if mobile
+		addTouchPad('FULL', 'A_B');
+		#end
+
 		var bg = new FlxSprite().makeGraphic(1, 1, FlxColor.BLACK);
 		bg.scale.set(FlxG.width, FlxG.height);
 		bg.updateHitbox();

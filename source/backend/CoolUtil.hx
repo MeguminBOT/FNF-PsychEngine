@@ -166,7 +166,13 @@ class CoolUtil {
 	inline public static function getSavePath():String {
 		final company:String = FlxG.stage.application.meta.get('company');
 		// #if (flixel < "5.0.0") return company; #else
+		#if mobile
+		// Keep saves in the public, browsable folder (cwd is already set to it in Main),
+		// so they survive reinstalls and can be backed up by the user.
+		return 'saves/${flixel.util.FlxSave.validate(FlxG.stage.application.meta.get('file'))}';
+		#else
 		return '${company}/${flixel.util.FlxSave.validate(FlxG.stage.application.meta.get('file'))}';
+		#end
 		// #end
 	}
 

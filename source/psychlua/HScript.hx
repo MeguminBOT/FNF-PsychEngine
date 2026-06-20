@@ -268,7 +268,10 @@ class HScript {
 
 	function preset() {
 		// Some very commonly used classes
-		#if sys
+		#if android
+		set('File', mobile.backend.ScriptFile);
+		set('FileSystem', mobile.backend.ScriptFileSystem);
+		#elseif sys
 		set('File', File);
 		set('FileSystem', FileSystem);
 		#end

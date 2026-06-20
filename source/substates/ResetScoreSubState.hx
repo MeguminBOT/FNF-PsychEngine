@@ -25,6 +25,10 @@ class ResetScoreSubState extends MusicBeatSubstate {
 
 		super();
 
+		#if mobile
+		addTouchPad('LEFT_RIGHT', 'A_B');
+		#end
+
 		var name:String = song;
 		if (week > -1) {
 			name = WeekData.weeksLoaded.get(WeekData.weeksList[week]).weekName;

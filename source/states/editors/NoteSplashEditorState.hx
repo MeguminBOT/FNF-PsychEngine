@@ -115,6 +115,10 @@ class NoteSplashEditorState extends MusicBeatState {
 		add(curText);
 
 		super.create();
+
+		#if mobile
+		addTouchPad('FULL', 'A_B');
+		#end
 	}
 
 	var animDropDown:PsychUIDropDownMenu;
