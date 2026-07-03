@@ -87,4 +87,8 @@ if [ -f "$SA" ]; then
 fi
 
 echo
+echo "Performing a quick reformat of the repository..."
+haxelib fixrepo
+
+echo
 echo "Finished!"

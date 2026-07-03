@@ -73,6 +73,12 @@ if exist "!SA!" (
 )
 
 echo.
+echo Performing a quick reformat of the repository...
+echo.
+
+call haxelib fixrepo
+
+echo.
 echo Finished!
 endlocal
 pause
