@@ -70,6 +70,10 @@ class LegacyNoteSkin {
 			// Multikey: keep the 4 arrows from the note skin and merge in the square atlas
 			// (centre "square" note + arrowSQUARE); per-column anim name from the Mania table.
 			var atlas:flixel.graphics.frames.FlxAtlasFrames = Paths.getSparrowAtlas(texture);
+			if (atlas == null) {
+				FlxG.log.error('LegacyStrumNote: skin "$texture" has no sparrow atlas (folder skin or missing?); classic strum render skipped');
+				return;
+			}
 			atlas.addAtlas(Paths.getSparrowAtlas(Mania.ATLAS));
 			strum.frames = atlas;
 			strum.antialiasing = ClientPrefs.data.antialiasing;
@@ -81,7 +85,12 @@ class LegacyNoteSkin {
 
 			strum.setGraphicSize(Std.int(strum.width * Mania.noteSizes[Mania.current - 1]));
 		} else {
-			strum.frames = Paths.getSparrowAtlas(texture);
+			var atlas:flixel.graphics.frames.FlxAtlasFrames = Paths.getSparrowAtlas(texture);
+			if (atlas == null) {
+				FlxG.log.error('LegacyStrumNote: skin "$texture" has no sparrow atlas (folder skin or missing?); classic strum render skipped');
+				return;
+			}
+			strum.frames = atlas;
 			strum.animation.addByPrefix('green', 'arrowUP');
 			strum.animation.addByPrefix('blue', 'arrowDOWN');
 			strum.animation.addByPrefix('purple', 'arrowLEFT');
@@ -163,14 +172,19 @@ class LegacyNoteSkin {
 				note.offsetX -= note._lastNoteOffX;
 			}
 		} else {
+			var atlas:flixel.graphics.frames.FlxAtlasFrames = Paths.getSparrowAtlas(skin);
+			if (atlas == null) {
+				// Folder skins (skin.tcfg + individual images) have no sparrow atlas, and the legacy
+				// note renderer only speaks sparrow. Bail instead of NPEing on null frames in
+				// loadNoteAnims -> findByPrefix (folder skins render via the v2 objects.notes path).
+				FlxG.log.error('LegacyNote: skin "$skin" has no sparrow atlas (folder skin?); legacy render skipped');
+				return;
+			}
 			// Multikey: notes on the default skin merge in the square atlas (centre "square" note).
 			// Custom per-note textures are left alone.
-			if (Mania.current != Mania.DEFAULT && (texture == null || texture.length < 1)) {
-				var atlas:flixel.graphics.frames.FlxAtlasFrames = Paths.getSparrowAtlas(skin);
+			if (Mania.current != Mania.DEFAULT && (texture == null || texture.length < 1))
 				atlas.addAtlas(Paths.getSparrowAtlas(Mania.ATLAS));
-				note.frames = atlas;
-			} else
-				note.frames = Paths.getSparrowAtlas(skin);
+			note.frames = atlas;
 			note.loadNoteAnims();
 			if (!note.isSustainNote) {
 				note.centerOffsets();

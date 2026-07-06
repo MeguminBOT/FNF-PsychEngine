@@ -33,6 +33,12 @@ class UIComponent extends Sprite {
 	/** Fired on a completed click (press + release on this widget). **/
 	public var onClick:Void->Void = null;
 
+	/** Fired on a right mouse press over this widget (context menus). **/
+	public var onRightClick:Void->Void = null;
+
+	/** Fired when the cursor first enters this widget (hover-driven descriptions/previews). **/
+	public var onHover:Void->Void = null;
+
 	/** Optional tooltip text (already-localized or a fixed string). **/
 	public var tooltip:String = null;
 
@@ -62,6 +68,7 @@ class UIComponent extends Sprite {
 			addEventListener(MouseEvent.ROLL_OVER, __onRollOver);
 			addEventListener(MouseEvent.ROLL_OUT, __onRollOut);
 			addEventListener(MouseEvent.MOUSE_DOWN, __onMouseDown);
+			addEventListener(MouseEvent.RIGHT_MOUSE_DOWN, __onRightMouseDown);
 		} else {
 			mouseChildren = true;
 			mouseEnabled = blocking;
@@ -133,6 +140,8 @@ class UIComponent extends Sprite {
 		hovered = true;
 		onStateChanged();
 		UIRoot.tooltipEnter(this);
+		if (onHover != null)
+			onHover();
 	}
 
 	function __onRollOut(_:MouseEvent):Void {
@@ -159,6 +168,21 @@ class UIComponent extends Sprite {
 	**/
 	function onPress(localX:Float, localY:Float):Void {}
 
+	function __onRightMouseDown(e:MouseEvent):Void {
+		if (!enabled)
+			return;
+		onRightPress(e.localX, e.localY);
+		if (onRightClick != null)
+			onRightClick();
+	}
+
+	/**
+		Right mouse press over this widget. Subclass hook (used for context menus).
+		@param localX press x in this widget's coordinates
+		@param localY press y in this widget's coordinates
+	**/
+	function onRightPress(localX:Float, localY:Float):Void {}
+
 	/** Feeds `hoverCursor` into OpenFL's native per-move cursor management. **/
 	@:noCompletion override function __getCursor():MouseCursor {
 		return (_interactive && enabled) ? hoverCursor : null;
@@ -179,6 +203,7 @@ class UIComponent extends Sprite {
 			removeEventListener(MouseEvent.ROLL_OVER, __onRollOver);
 			removeEventListener(MouseEvent.ROLL_OUT, __onRollOut);
 			removeEventListener(MouseEvent.MOUSE_DOWN, __onMouseDown);
+			removeEventListener(MouseEvent.RIGHT_MOUSE_DOWN, __onRightMouseDown);
 		}
 		@:privateAccess UIPointer.forget(this);
 		UIRoot.tooltipLeave(this);

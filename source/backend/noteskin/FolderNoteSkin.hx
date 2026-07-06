@@ -128,8 +128,8 @@ class FolderNoteSkin implements INoteSkin {
 		if (cfg.holdAntialiasing != null)
 			aa = cfg.holdAntialiasing;
 		body.antialiasing = tail.antialiasing = aa;
-		body.scale.x = scaleBase * fBody;
-		tail.scale.x = scaleBase * fTail;
+		body.scale.set(scaleBase * fBody, scaleBase * fBody);
+		tail.scale.set(scaleBase * fTail, scaleBase * fTail);
 		body.updateHitbox();
 		tail.updateHitbox();
 

@@ -859,6 +859,15 @@ class FunkinLua {
 		Lua_helper.add_callback(lua, "precacheMusic", function(name:String) {
 			Paths.music(name);
 		});
+		Lua_helper.add_callback(lua, "precacheVideo",
+			function(name:String, ?canSkip:Bool = true, ?forMidSong:Bool = false, ?loop:Bool = false) {
+				#if VIDEOS_ALLOWED
+				if (FileSystem.exists(Paths.video(name)))
+					game.precacheVideo(name, forMidSong, canSkip, loop);
+				else
+					luaTrace('precacheVideo: Video file not found: ' + name, false, false, FlxColor.RED);
+				#end
+			});
 
 		// others
 		Lua_helper.add_callback(lua, "triggerEvent", function(name:String, ?value1:String = '', ?value2:String = '') {

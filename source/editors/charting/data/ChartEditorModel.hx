@@ -35,6 +35,15 @@ final class ChartEditorModel {
 	/** Time tolerance in ms for matching change-points and note spots. **/
 	static inline var EPS:Float = 1.0;
 
+	/** Adapt mode: notes keep their absolute ms time (the grid shifts under them). **/
+	public static inline var ADAPT_KEEP:Int = 0;
+
+	/** Adapt mode: notes keep their musical position (step within section); ms times rescale. **/
+	public static inline var ADAPT_RESCALE:Int = 1;
+
+	/** Adapt mode: keep ms time, then re-snap every note to the 1/16 grid at the new timing. **/
+	public static inline var ADAPT_SNAP:Int = 2;
+
 	public function new() {}
 
 	/** Adopts a chart and rebuilds the timing cache. **/
@@ -233,15 +242,15 @@ final class ChartEditorModel {
 	}
 
 	/**
-		Sets the section's effective BPM: propagates through inheriting sections, keeps notes,
-		events and change-points at the same musical position (legacy "Rescale" behavior for BPM).
+		Sets the section's effective BPM, propagating through inheriting sections.
+		@param adapt how existing notes react (default `ADAPT_RESCALE`: keep musical position, retime)
 	**/
-	public function setBpm(sec:Int, v:Float):Void {
+	public function setBpm(sec:Int, v:Float, adapt:Int = ADAPT_RESCALE):Void {
 		if (sectionCount() == 0 || v <= 0)
 			return;
 		sec = clampSec(sec);
 		var secs:Array<ChartSection> = chart.sections;
-		var positions:MusicalPositions = capturePositions();
+		var positions:MusicalPositions = (adapt == ADAPT_RESCALE) ? capturePositions() : null;
 
 		if (sec == 0)
 			chart.bpm = v;
@@ -256,16 +265,23 @@ final class ChartEditorModel {
 		secs[sec].changeBPM = (sec > 0 && secs[sec].bpm != secs[sec - 1].bpm);
 
 		rebuildTiming();
-		restorePositions(positions);
+		if (positions != null)
+			restorePositions(positions);
+		if (adapt == ADAPT_SNAP)
+			snapAllNotes(16);
 		markDirty();
 	}
 
-	/** Sets the section's beats-per-section, propagating through equal-valued followers. Times keep. **/
-	public function setBeats(sec:Int, v:Float):Void {
+	/**
+		Sets the section's beats-per-section, propagating through equal-valued followers.
+		@param adapt how existing notes react (default `ADAPT_KEEP`: keep absolute ms time)
+	**/
+	public function setBeats(sec:Int, v:Float, adapt:Int = ADAPT_KEEP):Void {
 		if (sectionCount() == 0 || v <= 0)
 			return;
 		sec = clampSec(sec);
 		var secs:Array<ChartSection> = chart.sections;
+		var positions:MusicalPositions = (adapt == ADAPT_RESCALE) ? capturePositions() : null;
 		var old:Float = secs[sec].beats;
 		var i:Int = sec;
 		var n:Int = secs.length;
@@ -276,15 +292,23 @@ final class ChartEditorModel {
 			i++;
 		}
 		rebuildTiming();
+		if (positions != null)
+			restorePositions(positions);
+		if (adapt == ADAPT_SNAP)
+			snapAllNotes(16);
 		markDirty();
 	}
 
-	/** Sets the section's time-signature denominator, propagating like `setBeats`. **/
-	public function setDenominator(sec:Int, v:Int):Void {
+	/**
+		Sets the section's time-signature denominator, propagating like `setBeats`.
+		@param adapt how existing notes react (default `ADAPT_KEEP`: keep absolute ms time)
+	**/
+	public function setDenominator(sec:Int, v:Int, adapt:Int = ADAPT_KEEP):Void {
 		if (sectionCount() == 0 || v <= 0)
 			return;
 		sec = clampSec(sec);
 		var secs:Array<ChartSection> = chart.sections;
+		var positions:MusicalPositions = (adapt == ADAPT_RESCALE) ? capturePositions() : null;
 		var old:Int = secs[sec].denominator;
 		var i:Int = sec;
 		var n:Int = secs.length;
@@ -295,7 +319,38 @@ final class ChartEditorModel {
 			i++;
 		}
 		rebuildTiming();
+		if (positions != null)
+			restorePositions(positions);
+		if (adapt == ADAPT_SNAP)
+			snapAllNotes(16);
 		markDirty();
+	}
+
+	/**
+		Re-snaps every note's start time to the section-relative grid and re-sorts the list.
+		@param snapDiv the snap division (e.g. 16 for 1/16)
+		@return how many notes moved
+	**/
+	public function snapAllNotes(snapDiv:Int):Int {
+		var list:Array<SongNote> = chart.noteList;
+		var moved:Int = 0;
+		var i:Int = 0;
+		var n:Int = list.length;
+		while (i < n) {
+			var t:Float = snapTime(list[i].time, snapDiv);
+			if (Math.abs(t - list[i].time) > 0.001) {
+				list[i].time = t;
+				moved++;
+			}
+			i++;
+		}
+		if (moved > 0)
+			list.sort(compareNoteTime);
+		return moved;
+	}
+
+	static function compareNoteTime(a:SongNote, b:SongNote):Int {
+		return (a.time < b.time) ? -1 : (a.time > b.time ? 1 : 0);
 	}
 
 	/** Sets the effective key count from this section on (change-point at the section start). **/

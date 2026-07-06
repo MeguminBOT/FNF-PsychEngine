@@ -150,8 +150,14 @@ class SongChart {
 	**/
 	public static function fromLegacy(song:Song.SwagSong):SongChart {
 		var chart:SongChart = new SongChart();
-		if (song == null || song.notes == null)
+		if (song == null)
 			return chart;
+		// a noteless file - e.g. a standalone `events.json` loaded via getChart('events', ...) - carries
+		// only events; take those and bail (skip copyMetaFromLegacy, which has no bpm/notes to read).
+		if (song.notes == null) {
+			chart.events = (song.events != null) ? song.events : [];
+			return chart;
+		}
 		chart.copyMetaFromLegacy(song);
 		chart.notes = song.notes; // v1: authored sections are authoritative + editable
 

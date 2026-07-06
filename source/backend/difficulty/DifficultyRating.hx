@@ -39,8 +39,26 @@ typedef ChartRatings = {
 class DifficultyRating {
 	public static var providers:Array<RatingProvider> = [new OsuManiaStarCalc()];
 
-	/** Computes (cache-first) ratings + stats for `songName` at difficulty index `diff`, or null if the chart can't be loaded. */
+	/**
+	 * Ratings + stats for `songName` at difficulty index `diff`, cache-first by chart-file
+	 * signature: an unchanged file returns the cached result without a re-read/parse, a new or
+	 * edited file (changed mtime/size) is rescanned. Returns null if the chart can't be loaded.
+	 */
 	public static function ratingsFor(songName:String, diff:Int):Null<ChartRatings> {
+		var path:String = chartPathOf(songName, diff);
+		var result:Null<ChartRatings> = ChartScanCache.ratingsFor(path, function():ChartRatings return computeRatings(songName, diff));
+		ChartScanCache.commit();
+		return result;
+	}
+
+	/** The resolved chart file path for a song+difficulty (matches `Song.getChart`'s resolution). */
+	static function chartPathOf(songName:String, diff:Int):String {
+		var key:String = Highscore.formatSong(songName, diff);
+		return Paths.json('${Paths.formatToSongPath(songName)}/${Paths.formatToSongPath(key)}');
+	}
+
+	/** Loads + rates a chart from disk (the signature-miss path behind `ratingsFor`). */
+	static function computeRatings(songName:String, diff:Int):Null<ChartRatings> {
 		var song:SwagSong = loadChart(songName, diff);
 		if (song == null)
 			return null;

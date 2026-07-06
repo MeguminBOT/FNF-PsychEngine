@@ -331,12 +331,18 @@ class Paths {
 			if (parentFolder == 'songs')
 				modKey = 'songs/$key';
 
-			for (mod in Mods.getGlobalMods())
-				if (FileSystem.exists(mods('$mod/$modKey')))
+			if (pinModRoot != null) {
+				if (pinModRoot.length > 0 && FileSystem.exists(mods('$pinModRoot/$modKey')))
 					return true;
+				// pinned source lacks it -> fall through to the base OpenFlAssets check below
+			} else {
+				for (mod in Mods.getGlobalMods())
+					if (FileSystem.exists(mods('$mod/$modKey')))
+						return true;
 
-			if ((Mods.allowCurrentModAssets && FileSystem.exists(mods(Mods.currentModDirectory + '/' + modKey))) || FileSystem.exists(mods(modKey)))
-				return true;
+				if ((Mods.allowCurrentModAssets && FileSystem.exists(mods(Mods.currentModDirectory + '/' + modKey))) || FileSystem.exists(mods(modKey)))
+					return true;
+			}
 		}
 		#end
 		return (OpenFlAssets.exists(getPath(key, type, parentFolder, false)));
@@ -495,7 +501,21 @@ class Paths {
 	inline static public function modsImagesJson(key:String)
 		return modFolders('images/' + key + '.json');
 
+	// When set (Force Selected Skin), asset lookups resolve from ONE source only: a specific mod dir, or
+	// "" for base-only -- so another mod can't shadow the forced note skin. `null` = normal resolution.
+	// Set/cleared narrowly around a note-skin apply; leave it `null` everywhere else.
+	public static var pinModRoot:Null<String> = null;
+
 	static public function modFolders(key:String) {
+		if (pinModRoot != null) {
+			if (pinModRoot.length > 0) {
+				var pinned:String = mods(pinModRoot + '/' + key);
+				if (FileSystem.exists(pinned))
+					return pinned;
+			}
+			return 'mods/' + key; // not in the pinned source -> fall through to the base asset
+		}
+
 		if (Mods.allowCurrentModAssets && Mods.currentModDirectory != null && Mods.currentModDirectory.length > 0) {
 			var fileToCheck:String = mods(Mods.currentModDirectory + '/' + key);
 			if (FileSystem.exists(fileToCheck))

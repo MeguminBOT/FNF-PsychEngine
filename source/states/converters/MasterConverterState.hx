@@ -14,7 +14,9 @@ import backend.tools.MediaConverter;
  */
 class MasterConverterState extends MusicBeatState {
 	var options:Array<String> = [
-		'osu! Beatmap Converter'
+		'osu! Beatmap Converter',
+		'Script Converter',
+		'Chart Converter'
 	];
 
 	private var grpTexts:FlxTypedGroup<Alphabet>;
@@ -92,6 +94,24 @@ class MasterConverterState extends MusicBeatState {
 	}
 
 	function openConverter(name:String) {
+		// The Script Converter only reads/writes local script files, so it needs no external tools.
+		if (name == 'Script Converter') {
+			FlxG.sound.play(Paths.sound('confirmMenu'), 0.6);
+			FlxG.sound.music.volume = 0;
+			FreeplayState.destroyFreeplayVocals();
+			MusicBeatState.switchState(new ScriptConverterState());
+			return;
+		}
+
+		// The Chart Converter only reads/writes local chart files, so it needs no external tools either.
+		if (name == 'Chart Converter') {
+			FlxG.sound.play(Paths.sound('confirmMenu'), 0.6);
+			FlxG.sound.music.volume = 0;
+			FreeplayState.destroyFreeplayVocals();
+			MusicBeatState.switchState(new ChartConverterState());
+			return;
+		}
+
 		// Gate on external tools: if ffmpeg isn't installed, prompt to download it
 		// first, then retry opening the converter once it's ready.
 		if (!ffmpegReady) {

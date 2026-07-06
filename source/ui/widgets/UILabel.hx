@@ -1,6 +1,7 @@
 package ui.widgets;
 
 import openfl.text.TextField;
+import openfl.text.TextFieldAutoSize;
 import openfl.text.TextFormatAlign;
 import ui.UIComponent;
 import ui.UIFonts;
@@ -32,6 +33,9 @@ final class UILabel extends UIComponent {
 	public var size(default, set):Int;
 
 	public var align(default, set):TextFormatAlign;
+
+	/** When `> 0`, the label word-wraps to this width (multi-line); `0` keeps the single-line auto-size. **/
+	public var wrapWidth(default, set):Float = 0;
 
 	final tf:TextField;
 
@@ -73,10 +77,44 @@ final class UILabel extends UIComponent {
 	override public function render():Void {
 		var resolved:String = (key != null) ? UILocale.t(key, fallback) : text;
 		UIFonts.restyle(tf, UITheme.fs(size), resolveColor(), align);
-		if (tf.text != resolved)
-			tf.text = resolved;
-		w = tf.width;
-		h = tf.height;
+		if (wrapWidth > 0) {
+			tf.multiline = true;
+			tf.wordWrap = true;
+			tf.autoSize = TextFieldAutoSize.NONE;
+			tf.width = wrapWidth;
+			if (tf.text != resolved)
+				tf.text = resolved;
+			w = wrapWidth;
+			h = tf.textHeight + 4;
+			tf.height = h;
+		} else {
+			tf.multiline = false;
+			tf.wordWrap = false;
+			tf.autoSize = TextFieldAutoSize.LEFT;
+			if (tf.text != resolved)
+				tf.text = resolved;
+			w = tf.width;
+			h = tf.height;
+		}
+	}
+
+	function set_wrapWidth(v:Float):Float {
+		if (wrapWidth == v)
+			return v;
+		wrapWidth = v;
+		invalidate();
+		return v;
+	}
+
+	/**
+		Forces an immediate (re)layout so `w`/`h` are valid right now instead of on the next frame.
+		Use before positioning sibling widgets below a wrapped label in a flow layout, where the
+		deferred render would otherwise report a stale (often zero) height.
+		@return the measured height
+	**/
+	public function measure():Float {
+		render();
+		return h;
 	}
 
 	function set_key(v:String):String {

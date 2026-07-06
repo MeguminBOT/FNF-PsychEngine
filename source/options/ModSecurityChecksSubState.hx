@@ -48,45 +48,55 @@ class ModSecurityChecksSubState extends BaseOptionsMenu {
 		"import Sys" => "Haxe\nGrants access to the top-level\nSys class and its\nsystem-level APIs.",
 	];
 
-	var changed:Bool = false;
+	/** Set by any toggle's setter; `commit` persists + rescans when it's true. **/
+	static var pendingChanged:Bool = false;
 
 	public function new() {
 		title = Language.getPhrase('mod_security_checks_menu', 'Mod Security Checks');
 		rpcTitle = 'Mod Security Checks';
+		for (o in buildOptions())
+			addOption(o);
+		super();
+	}
 
+	/**
+	 * One BOOL toggle per user-toggleable security check, read/written straight through the
+	 * `ModSecurity` per-check map. Shared by this substate and the embedded modal.
+	 * @return the toggle options, in scanner order
+	 */
+	public static function buildOptions():Array<Option> {
+		var opts:Array<Option> = [];
 		final names = ModSecurity.getAllCheckNames();
 		for (i in 0...names.length) {
 			final name = names[i];
 			if (name == "ModSecurity (tamper)")
 				continue; // not user-toggleable
-			addCheck(name);
+			final desc = DESCRIPTIONS.exists(name) ? DESCRIPTIONS.get(name) : 'Scan mod scripts for usage of "$name".';
+			final opt = new Option(name, desc, name, BOOL);
+			opt.defaultValue = true;
+			// Missing map entries default to enabled (matches ModSecurity.isCheckEnabled).
+			opt.getValue = function():Dynamic return ModSecurity.isCheckEnabled(name);
+			opt.setValue = function(v:Dynamic):Dynamic {
+				ModSecurity.setCheckEnabled(name, v == true);
+				pendingChanged = true;
+				return v;
+			};
+			opts.push(opt);
 		}
-
-		super();
+		return opts;
 	}
 
-	function addCheck(name:String):Void {
-		final desc = DESCRIPTIONS.exists(name) ? DESCRIPTIONS.get(name) : 'Scan mod scripts for usage of "$name".';
-		final opt = new Option(name, desc, name, BOOL);
-		opt.defaultValue = true;
-		// Read straight from the per-check map; missing entries default to enabled
-		// (matches ModSecurity.isCheckEnabled).
-		opt.getValue = function():Dynamic return ModSecurity.isCheckEnabled(name);
-		opt.setValue = function(v:Dynamic):Dynamic {
-			ModSecurity.setCheckEnabled(name, v == true);
-			changed = true;
-			return v;
-		};
-		addOption(opt);
+	/** Persists the toggles and re-scans all enabled mods, if anything changed since the last commit. **/
+	public static function commit():Void {
+		if (!pendingChanged)
+			return;
+		ClientPrefs.saveSettings();
+		ModSecurity.rescanAll();
+		pendingChanged = false;
 	}
 
 	override function destroy():Void {
-		if (changed) {
-			// Persist the new map and re-scan all enabled mods so the toggles
-			// take effect right away.
-			ClientPrefs.saveSettings();
-			ModSecurity.rescanAll();
-		}
+		commit();
 		super.destroy();
 	}
 }

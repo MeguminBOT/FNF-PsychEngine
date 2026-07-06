@@ -1,77 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <project>
-	<!-- _________________________ Application Settings _________________________ -->
+
+	<!-- ============================== Application ============================== -->
 
 	<app title="Friday Night Funkin': Psych Engine" file="PsychEngine" packageName="com.lulu.psychengine" package="com.lulu.psychengine" main="Main" version="0.2.8" company="Lulu" />
-
-	<!--Switch Export with Unique ApplicationID and Icon-->
-	<set name="APP_ID" value="0x0100f6c013bbc000" />
-
-	<!--The flixel preloader is not accurate in Chrome. You can use it regularly if you embed the swf into a html file
-		or you can set the actual size of your file manually at "FlxPreloaderBase-onUpdate-bytesTotal"-->
-	<!-- <app preloader="Preloader" resizable="true" /> -->
 	<app preloader="flixel.system.FlxPreloader" />
 
-	<!--Minimum without FLX_NO_GAMEPAD: 11.8, without FLX_NO_NATIVE_CURSOR: 11.2-->
-	<set name="SWF_VERSION" value="11.8" />
-	
-	<!-- ______________________ PSYCH ENGINE CUSTOMIZATION ______________________ -->
+	<set name="APP_ID" value="0x0100f6c013bbc000" /> <!-- Switch export: unique application ID -->
+	<set name="SWF_VERSION" value="11.8" />          <!-- Min 11.8 with gamepad, 11.2 with native cursor -->
 
-	<define name="MODS_ALLOWED" if="desktop || mobile" />
+	<!-- ============================= Feature Flags ============================= -->
+
+	<!-- Scripting & mods -->
+	<define name="MODS_ALLOWED"    if="desktop || mobile" />
 	<define name="HSCRIPT_ALLOWED" if="desktop || mobile" />
-	<define name="LUA_ALLOWED" if="desktop || mobile" />
-	<define name="ACHIEVEMENTS_ALLOWED" />
-	<define name="DISCORD_ALLOWED" if="desktop" /> <!-- Discord RPC is desktop-only IPC; hxdiscord_rpc has no android/mobile backend -->
+	<define name="LUA_ALLOWED"     if="desktop || mobile" />
 
+	<!-- Core features -->
+	<define name="ACHIEVEMENTS_ALLOWED" />
 	<define name="TRANSLATIONS_ALLOWED" />
-	<define name="IRIS_DEBUG"/>
-	
+	<define name="BASE_GAME_FILES" />
+	<define name="TITLE_SCREEN_EASTER_EGG" />
+	<define name="CHECK_FOR_UPDATES" if="desktop" />
+	<define name="DISCORD_ALLOWED"   if="desktop" /> <!-- Discord RPC is desktop-only IPC; hxdiscord_rpc has no android/mobile backend -->
+	<define name="VIDEOS_ALLOWED"    if="desktop || mobile" />
+	<define name="CRASH_HANDLER"     if="desktop || mobile" />
+	<define name="IRIS_DEBUG" />
+
+	<!-- Loading screen -->
 	<define name="MULTITHREADED_LOADING" />
 	<define name="SHOW_LOADING_SCREEN" />
-	<define name="PSYCH_WATERMARKS"/> <!-- DELETE THIS TO REMOVE THE PSYCH LOGO FROM LOADING SCREEN -->
+	<define name="PSYCH_WATERMARKS" /> <!-- DELETE THIS TO REMOVE THE PSYCH LOGO FROM LOADING SCREEN -->
 
-	<define name="TITLE_SCREEN_EASTER_EGG"/>
-	<define name="BASE_GAME_FILES" />
-	<define name="VIDEOS_ALLOWED" if="desktop || mobile"/>
+	<!-- Optional desktop-only features -->
+	<define name="CONVERTERS_ALLOWED" if="desktop" /> <!-- Chart converters for other games -->
+	<define name="HARDWARE_ALLOWED"   if="desktop" /> <!-- CPU/GPU FPS readouts; needs the hxhardware haxelib (see Libraries) -->
 
-	<!-- CPU/GPU readouts for the FPS counter. Needs the hxhardware lib:
-	     haxelib git hxhardware https://github.com/Vortex2Oblivion/hxhardware
-	     Comment this out (and the haxelib below) if you don't want the native dependency. -->
-	<define name="HARDWARE_ALLOWED" if="desktop"/>
+	<!-- =============================== Window ================================== -->
 
-	<!-- Various converters for charts from other games -->
-	<define name="CONVERTERS_ALLOWED" if="desktop"/> 
+	<window width="1280" height="720" fps="60" background="#000000" hardware="true" vsync="false" allow-high-dpi="true" /> <!-- all targets -->
+	<window if="html5"   resizable="true" />
+	<window if="desktop" orientation="landscape" fullscreen="false" resizable="true"  vsync="false" />
+	<window if="mobile"  orientation="landscape" fullscreen="true"  resizable="false" width="0" height="0" />
+	<window if="switch"  orientation="landscape" fullscreen="true"  resizable="true"  width="0" height="0" />
 
-	<!-- ____________________________ Window Settings ___________________________ -->
+	<!-- ================================ Paths ================================== -->
 
-	<!--These window settings apply to all targets-->
-	<window width="1280" height="720" fps="60" background="#000000" hardware="true" vsync="false" allow-high-dpi="true" />
-
-	<!--HTML5-specific-->
-	<window if="html5" resizable="true" />
-
-	<!--Desktop-specific-->
-	<window if="desktop" orientation="landscape" fullscreen="false" resizable="true" vsync="false"/>
-
-	<!--Mobile-specific-->
-	<window if="mobile" orientation="landscape" fullscreen="true" width="0" height="0" resizable="false"/>
-
-	<!--Switch-specific-->
-	<window if="switch" orientation="landscape" fullscreen="true" width="0" height="0" resizable="true" />
-
-	<!-- _____________________________ Path Settings ____________________________ -->
-
-	<set name="BUILD_DIR" value="export/debug" if="debug" />
+	<set name="BUILD_DIR" value="export/debug"   if="debug" />
 	<set name="BUILD_DIR" value="export/release" unless="debug" />
-
 	<classpath name="source" />
 
-	<!-- __________________________ Game Assets & Etc. __________________________ -->
-	
-	<!-- Turn on Crash Handler -->
-	<define name="CRASH_HANDLER" if="desktop || mobile" />
+	<!-- ================================ Assets ================================= -->
 
-	<!-- Assets -->
 	<assets path="assets/fonts" />
 	<assets path="assets/shared"        exclude="*.ogg" if="web"/>
 	<assets path="assets/shared"        exclude="*.mp3" unless="web"/>
@@ -82,6 +62,7 @@
 	<assets path="assets/songs"         exclude="*.mp3" unless="web"/>
 	<assets path="assets/week_assets"   rename="assets" exclude="*.ogg" if="web"/>
 	<assets path="assets/week_assets"   rename="assets" exclude="*.mp3" unless="web"/>
+
 	<section if="TITLE_SCREEN_EASTER_EGG">
 		<assets path="assets/secrets" rename="assets/shared" exclude="*.ogg" if="web"/>
 		<assets path="assets/secrets" rename="assets/shared" exclude="*.mp3"  unless="web"/>
@@ -99,13 +80,12 @@
 		<haxelib name="funkin.vis" if="BASE_GAME_FILES"/>
 	</section>
 
-	<define name="CHECK_FOR_UPDATES" if="desktop"/>
-
 	<section if="MODS_ALLOWED">
 		<assets path='example_mods' rename='mods' embed='false' type='template' unless="mac"/>
 		<assets path='example_mods' rename='mods' embed='false' if="mac"/>
 		<assets path='list.txt' rename='modsList.txt' />
 	</section>
+
 	<assets path='art/readme.txt' rename='do NOT readme.txt' />
 
 	<!-- OpenAL config -->
@@ -114,7 +94,7 @@
 		<assets path="alsoft.txt" rename="plugins/alsoft.conf" type="text" unless="windows"/>
 	</section>
 
-	<!-- ____________________________ Android Settings __________________________ -->
+	<!-- =============================== Android ================================= -->
 
 	<section if="android">
 		<!-- Public top-level storage (/storage/emulated/0/PsychEngine) so mods/saves
@@ -130,13 +110,14 @@
 		<config:android permission="android.permission.VIBRATE" />
 		<config:android target-sdk-version="34" />
 		<config:android minimum-sdk-version="21" />
-	
-		<include path="signing.local.xml" unless="debug" /> <!-- REMOVE THIS if you don't use signing keys-->
+
+		<include path="signing.local.xml" unless="debug" /> <!-- REMOVE THIS if you don't use signing keys -->
 
 		<architecture exclude="armv7" />
 		<architecture exclude="armv7s" />
 		<architecture exclude="x86" />
 		<architecture exclude="x64" />
+
 		<!-- Legacy square icons (drawable-*dpi/icon.png) are auto-generated by lime from
 		     the <icon> tags below. This template overlay adds the API 26+ adaptive icon
 		     (drawable-anydpi-v26/icon.xml + mipmap-*dpi/icon_foreground.png) so launchers
@@ -145,104 +126,87 @@
 		<template path="art/icons/templates" />
 	</section>
 
-	<!-- _______________________________ Libraries ______________________________ -->
+	<!-- ============================== Libraries =============================== -->
 
 	<haxelib name="flixel"/>
 	<haxelib name="flixel-addons"/>
+	<haxelib name="flixel-animate"/>
 	<haxelib name="tjson"/>
 
-	<!--Psych stuff needed-->
-	<haxelib name="hxluajit" if="LUA_ALLOWED"/>
+	<!-- Psych features -->
+	<haxelib name="hxluajit"         if="LUA_ALLOWED"/>
 	<haxelib name="hxluajit-wrapper" if="LUA_ALLOWED"/>
 	<haxelib name="hscript-insanity" if="HSCRIPT_ALLOWED"/>
-	<haxelib name="hxvlc" if="VIDEOS_ALLOWED"/>
-	<haxelib name="hxhardware" if="HARDWARE_ALLOWED"/>
-	<haxelib name="hxdiscord_rpc" if="DISCORD_ALLOWED"/>
-	<haxelib name="flixel-animate"/>
+	<haxelib name="hxvlc"            if="VIDEOS_ALLOWED"/>
+	<haxelib name="hxdiscord_rpc"    if="DISCORD_ALLOWED"/>
+	<haxelib name="hxhardware"       if="HARDWARE_ALLOWED"/> <!-- haxelib git hxhardware https://github.com/Vortex2Oblivion/hxhardware -->
 
-	<!-- Android: storage paths / permissions / toasts + haptics. Pull in their
+	<!-- Android: storage paths / permissions / toasts + haptics. Pulls in their
 	     bundled android config (Java extension, gradle deps) automatically. -->
 	<haxelib name="extension-androidtools" if="android"/>
-	<haxelib name="extension-haptics" if="android"/>
+	<haxelib name="extension-haptics"      if="android"/>
 
-	<!-- Disable Discord IO Thread -->
+	<haxelib name="hxcpp-debug-server" if="debug"/> <!-- Terminal log prompt on debug builds -->
+
+	<!-- ============================ Haxe Defines =============================== -->
+
+	<!-- Third-party library tuning -->
 	<haxedef name="DISCORD_DISABLE_IO_THREAD" if="hxdiscord_rpc" />
+	<haxedef name="HXC_LIBVLC_LOGGING"        if="VIDEOS_ALLOWED debug" />
+	<haxedef name="HXVLC_NO_SHARE_DIRECTORY"  if="VIDEOS_ALLOWED" />
+	<haxedef name="HXC_DEBUG_TRACE"           if="debug" /> <!-- hxCodec debug traces -->
+
+	<!-- Toolchain -->
 	<haxedef name="NO_PRECOMPILED_HEADERS" if="linux" />
-	<!-- Compile the windows target with clang-cl + lld (setup/hxcpp-clang-cl.xml): lime build windows -Dclang -->
-	<haxedef name="HXCPP_CLANG_CL" if="windows clang" />
-	<!-- Silence the flood of NDK warnings from C++ externs on android builds. -->
-	<haxedef name="HXCPP_CFLAGS" value="-Wno-all -w" if="android" />
+	<haxedef name="HXCPP_CLANG_CL" if="windows clang" />          <!-- clang-cl + lld (setup/hxcpp-clang-cl.xml): lime build windows -Dclang -->
+	<haxedef name="HXCPP_CFLAGS" value="-Wno-all -w" if="android" /> <!-- Silence NDK warning flood from C++ externs -->
 
-	<!-- Enables a terminal log prompt on debug builds -->
-	<haxelib name="hxcpp-debug-server" if="debug"/>
-	<haxedef name="HXC_LIBVLC_LOGGING" if="VIDEOS_ALLOWED debug" />
-	<haxedef name="HXVLC_NO_SHARE_DIRECTORY" if="VIDEOS_ALLOWED" />
-	
-	<!-- ______________________________ Haxedefines _____________________________ -->
+	<!-- Crash handler (Izzy Engine) -->
+	<haxedef name="HXCPP_CHECK_POINTER" if="CRASH_HANDLER" />
+	<haxedef name="HXCPP_STACK_LINE"    if="CRASH_HANDLER" />
+	<haxedef name="HXCPP_STACK_TRACE"   if="CRASH_HANDLER" />
 
-	<!--Enable the Flixel core recording system-->
-	<!--<haxedef name="FLX_RECORD" />-->
+	<!-- Flixel core -->
+	<haxedef name="FLX_NO_FOCUS_LOST_SCREEN" />
+	<haxedef name="FLX_NO_DEBUG" unless="debug" />       <!-- auto-set in release -->
+	<haxedef name="NAPE_RELEASE_BUILD" unless="debug" /> <!-- big perf win for Nape release builds -->
 
-	<!--Disable the right and middle mouse buttons-->
-	<!-- <haxedef name="FLX_NO_MOUSE_ADVANCED" /> -->
+	<!-- Misc -->
+	<haxedef name="no-deprecation-warnings" />
+	<haxedef name="message.reporting" value="pretty" /> <!-- Haxe 4.3.0+: pretty | indent | classic -->
 
-	<!--Disable the native cursor API on Flash-->
-	<!--<haxedef name="FLX_NO_NATIVE_CURSOR" />-->
-
-	<!--Optimise inputs, be careful you will get null errors if you don't use conditionals in your game-->
+	<!-- Optional HaxeFlixel toggles - uncomment to enable. Careful with the input
+	     ones: you'll get null errors if the game uses an API you disable. -->
+	<!-- <haxedef name="FLX_RECORD" /> -->              <!-- Flixel recording system -->
+	<!-- <haxedef name="FLX_NO_MOUSE_ADVANCED" /> -->   <!-- disable right/middle mouse buttons -->
+	<!-- <haxedef name="FLX_NO_NATIVE_CURSOR" /> -->    <!-- disable native cursor (Flash) -->
 	<!-- <haxedef name="FLX_NO_MOUSE" if="mobile" /> -->
 	<!-- <haxedef name="FLX_NO_KEYBOARD" if="mobile" /> -->
 	<!-- <haxedef name="FLX_NO_TOUCH" if="desktop" /> -->
-	<!--<haxedef name="FLX_NO_GAMEPAD" />-->
+	<!-- <haxedef name="FLX_NO_GAMEPAD" /> -->
+	<!-- <haxedef name="FLX_NO_SOUND_TRAY" /> -->
+	<!-- <haxedef name="FLX_NO_SOUND_SYSTEM" /> -->
 
-	<!--Disable the Flixel core sound tray-->
-	<!--<haxedef name="FLX_NO_SOUND_TRAY" />-->
+	<!-- =============================== Macros ================================== -->
 
-	<!--Disable the Flixel sound management code-->
-	<!--<haxedef name="FLX_NO_SOUND_SYSTEM" />-->
-
-	<!--Disable the Flixel core focus lost screen-->
-	<haxedef name="FLX_NO_FOCUS_LOST_SCREEN" />
-	
-	<!-- Show debug traces for hxCodec -->
-	<haxedef name="HXC_DEBUG_TRACE" if="debug" />
-	
-	<!--Disable the Flixel core debugger. Automatically gets set whenever you compile in release mode!-->
-	<haxedef name="FLX_NO_DEBUG" unless="debug" />
-
-	<!--Enable this for Nape release builds for a serious peformance improvement-->
-	<haxedef name="NAPE_RELEASE_BUILD" unless="debug" />
-	
-	<!--Used for Izzy Engine's crash handler-->
-	<haxedef name="HXCPP_CHECK_POINTER" if="CRASH_HANDLER" />
-	<haxedef name="HXCPP_STACK_LINE" if="CRASH_HANDLER" />
-	<haxedef name="HXCPP_STACK_TRACE" if="CRASH_HANDLER" />
-	
-	<!--Disable deprecated warnings-->
-	<haxedef name='no-deprecation-warnings' />
-
-	<!-- Haxe 4.3.0+: Enable pretty syntax errors and stuff. -->
-	<!-- pretty (haxeflixel default), indent, classic (haxe compiler default) -->
-	<haxedef name="message.reporting" value="pretty" />
-
-	<!--Macro fixes-->
 	<haxeflag name="--macro" value="allowPackage('flash')" />
 	<haxeflag name="--macro" value="include('my.pack')" />
 
 	<!-- Android: rewrite File.getContent/getBytes + FileSystem.exists across the game's
 	     packages to fall back to APK-bundled assets. No-op on every other target. -->
 	<haxeflag name="--macro" value="macros.FileAccessMacro.use()" if="android" />
+
 	<!-- osu! storyboard runtime: only referenced from generated Lua stages via import(), so force-compile it
 	     (keep = compile even if unreferenced AND survive DCE; include() takes a package, not a class).
 	     Belt-and-suspenders: OsuConversionJob also holds a hard @:keep reference to it. -->
 	<haxeflag name="--macro" value="keep('backend.osu.OsuStoryboardPlayer')" if="desktop" />
 
-	<!-- _________________________________ Custom _______________________________ -->
+	<!-- ================================ Icons ================================== -->
 
 	<assets path='art/icons/iconOG.png' rename='icon.png' if="linux || mac" />
-	
 	<icon path="art/icons/icon16.png" size='16'/>
 	<icon path="art/icons/icon32.png" size='32'/>
 	<icon path="art/icons/icon64.png" size='64'/>
 	<icon path="art/icons/iconOG.png" />
+
 </project>

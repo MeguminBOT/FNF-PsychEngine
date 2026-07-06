@@ -17,6 +17,9 @@ import states.TitleState;
 	public var autoPause:Bool = true;
 	public var antialiasing:Bool = true;
 	public var noteSkin:String = 'Default';
+	// Locks the selected note skin: mods can't replace it via chart arrowSkin, per-note textures, or
+	// their own same-named assets. Custom note TYPES still keep their own look.
+	public var forceNoteSkin:Bool = false;
 	public var uiSkin:String = 'Default';
 	public var splashSkin:String = 'From Noteskin';
 	public var splashAlpha:Float = 0.6;
@@ -24,6 +27,7 @@ import states.TitleState;
 	public var shaders:Bool = true;
 	public var cacheOnGPU:Bool = #if !switch false #else true #end; // GPU Caching made by Raltyro
 	public var framerate:Int = 60;
+	public var uncapFramerate:Bool = false;
 	public var camZooms:Bool = true;
 	public var hideHud:Bool = false;
 	public var noteOffset:Int = 0;
@@ -74,6 +78,7 @@ import states.TitleState;
 	public var assetRGBByKeyPixel:Map<String, Array<Array<Array<FlxColor>>>> = new Map();
 
 	public var ghostTapping:Bool = true;
+	public var sustainsOverNotes:Bool = false;
 	public var timeBarType:String = 'Time Left';
 	public var scoreZoom:Bool = true;
 	public var noReset:Bool = false;
@@ -145,6 +150,34 @@ import states.TitleState;
 class ClientPrefs {
 	public static var data:SaveVariables = {};
 	public static var defaultData:SaveVariables = {};
+
+	/** Upper bound of the capped framerate slider; also the pinned update/logic rate while FPS is uncapped. **/
+	public static inline var FRAMERATE_MAX:Int = 240;
+
+	/** Draw framerate target used when `uncapFramerate` is on -- high enough to be hardware-limited in practice. **/
+	public static inline var FRAMERATE_UNCAPPED:Int = 1000;
+
+	/**
+		Pushes `framerate`/`uncapFramerate` onto flixel. When uncapped, the draw rate is raised to
+		`FRAMERATE_UNCAPPED` while the update/logic rate stays pinned at `FRAMERATE_MAX`; otherwise both
+		track `data.framerate`. Call after changing either pref (boot + options).
+	**/
+	public static function applyFramerate():Void {
+		if (data.uncapFramerate) {
+			FlxG.updateFramerate = FRAMERATE_MAX;
+			FlxG.drawFramerate = FRAMERATE_UNCAPPED;
+			return;
+		}
+
+		final fps:Int = data.framerate;
+		if (fps > FlxG.drawFramerate) {
+			FlxG.updateFramerate = fps;
+			FlxG.drawFramerate = fps;
+		} else {
+			FlxG.drawFramerate = fps;
+			FlxG.updateFramerate = fps;
+		}
+	}
 
 	// Every key has two binds, add your key bind down here and then add your control on options/ControlsSubState.hx and Controls.hx
 	public static var keyBinds:Map<String, Array<FlxKey>> = [
@@ -272,13 +305,7 @@ class ClientPrefs {
 		}
 		#end
 
-		if (data.framerate > FlxG.drawFramerate) {
-			FlxG.updateFramerate = data.framerate;
-			FlxG.drawFramerate = data.framerate;
-		} else {
-			FlxG.drawFramerate = data.framerate;
-			FlxG.updateFramerate = data.framerate;
-		}
+		applyFramerate();
 
 		if (FlxG.save.data.gameplaySettings != null) {
 			var savedMap:Map<String, Dynamic> = FlxG.save.data.gameplaySettings;

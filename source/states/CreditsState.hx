@@ -674,15 +674,22 @@ class CreditsState extends MusicBeatState {
 
 	function resolvePersonGraphic(person:CreditPerson):FlxGraphic {
 		var folder:String = person.modFolder;
-		if (folder != null && folder.length > 0)
+		var prevDir:String = Mods.currentModDirectory;
+		var prevAllow:Bool = Mods.allowCurrentModAssets;
+		if (folder != null && folder.length > 0) {
 			Mods.currentModDirectory = folder;
+			// The credits screen runs with allowCurrentModAssets off (core menu); turn it on for this
+			// resolution so the owning mod's own icon is found instead of falling back to the placeholder.
+			Mods.allowCurrentModAssets = true;
+		}
 
 		var path:String = 'credits/missing_icon';
 		if (person.icon != null && person.icon.length > 0 && Paths.fileExists('images/${person.icon}.png', IMAGE))
 			path = person.icon;
 
 		var graphic:FlxGraphic = Paths.image(path);
-		Mods.currentModDirectory = '';
+		Mods.currentModDirectory = prevDir;
+		Mods.allowCurrentModAssets = prevAllow;
 		return graphic;
 	}
 
@@ -713,14 +720,19 @@ class CreditsState extends MusicBeatState {
 	}
 
 	function resolveImage(asset:String, folder:String):flixel.graphics.FlxGraphic {
-		if (folder != null && folder.length > 0)
+		var prevDir:String = Mods.currentModDirectory;
+		var prevAllow:Bool = Mods.allowCurrentModAssets;
+		if (folder != null && folder.length > 0) {
 			Mods.currentModDirectory = folder;
+			Mods.allowCurrentModAssets = true; // enable mod resolution in this core-menu screen (see resolvePersonGraphic)
+		}
 
 		var graphic:flixel.graphics.FlxGraphic = null;
 		if (Paths.fileExists('images/$asset.png', IMAGE))
 			graphic = Paths.image(asset);
 
-		Mods.currentModDirectory = '';
+		Mods.currentModDirectory = prevDir;
+		Mods.allowCurrentModAssets = prevAllow;
 		return graphic;
 	}
 

@@ -850,6 +850,31 @@ class PlayState extends MusicBeatState {
 
 	public var videoCutscene:VideoSprite = null;
 
+	/** Videos warmed by `precacheVideo`, keyed by name, adopted on the matching `startVideo` call. */
+	public var precachedVideos:Map<String, VideoSprite> = new Map<String, VideoSprite>();
+
+	/**
+	 * Warms a video ahead of time so the matching `startVideo` starts without the open/decode hitch.
+	 * Pass the same `forMidSong`/`canSkip`/`loop` you'll later hand to `startVideo`; a mismatch on
+	 * `forMidSong` or `loop` (which are baked in at load time) discards the warmed copy and rebuilds.
+	 */
+	public function precacheVideo(name:String, forMidSong:Bool = false, canSkip:Bool = true, loop:Bool = false):Void {
+		#if VIDEOS_ALLOWED
+		if (precachedVideos.exists(name))
+			return;
+
+		final fileName:String = Paths.video(name);
+		#if sys
+		if (!FileSystem.exists(fileName))
+		#else
+		if (!OpenFlAssets.exists(fileName))
+		#end
+			return;
+
+		precachedVideos.set(name, new VideoSprite(fileName, forMidSong, canSkip, loop, true));
+		#end
+	}
+
 	public function startVideo(name:String, forMidSong:Bool = false, canSkip:Bool = true, loop:Bool = false, playOnLoad:Bool = true) {
 		#if VIDEOS_ALLOWED
 		inCutscene = !forMidSong;
@@ -866,7 +891,18 @@ class PlayState extends MusicBeatState {
 		foundFile = true;
 
 		if (foundFile) {
-			videoCutscene = new VideoSprite(fileName, forMidSong, canSkip, loop);
+			var reused:VideoSprite = precachedVideos.get(name);
+			if (reused != null) {
+				precachedVideos.remove(name);
+				// The warmed copy is only valid if the load-time options match; otherwise rebuild.
+				if (reused.waiting != forMidSong || reused.looping != loop) {
+					reused.destroy();
+					reused = null;
+				}
+			}
+
+			videoCutscene = reused != null ? reused : new VideoSprite(fileName, forMidSong, canSkip, loop);
+			videoCutscene.canSkip = canSkip;
 			if (forMidSong)
 				videoCutscene.videoSprite.bitmap.rate = playbackRate;
 
@@ -1332,9 +1368,12 @@ class PlayState extends MusicBeatState {
 		noteGroup.add(notes);
 
 		try {
+			// a standalone data/<song>/events.json, in EITHER the legacy grouped shape
+			// ([time, [[name, v1, v2], ...]]) OR the psych_v2 object shape ({t, name, values}).
+			// eventsFromV2 normalizes both to the grouped shape makeEvent consumes.
 			var eventsChart:SwagSong = Song.getChart('events', songName);
 			if (eventsChart != null)
-				for (event in eventsChart.events) // Event Notes
+				for (event in Song.eventsFromV2(eventsChart.events)) // Event Notes
 					for (i in 0...event[1].length)
 						makeEvent(event, i);
 		} catch (e:Dynamic) {}
@@ -2119,6 +2158,15 @@ class PlayState extends MusicBeatState {
 								gf = newCharacter; // character != null which would already be this.gf
 						}
 
+						// v2 note runtime sings through each strumline's cached Character list; repoint
+						// any line that was singing the swapped-out character to the new one, otherwise
+						// it keeps animating the old (now-hidden) instance and the new one sits idle.
+						if (strumLines != null)
+							for (line in strumLines)
+								for (ci in 0...line.characters.length)
+									if (line.characters[ci] == character)
+										line.characters[ci] = newCharacter;
+
 						icon?.changeIcon(newCharacter.healthIcon);
 						reloadHealthBarColors();
 
@@ -2797,12 +2845,23 @@ class PlayState extends MusicBeatState {
 		opponentReceptors = (firstOpp != null) ? firstOpp.receptors : [];
 		playerReceptors = (firstPlayer != null) ? firstPlayer.receptors : [];
 
-		// Render order, back -> front: receptors, then all sustains, then all note heads.
-		noteGroup.add(receptorGroup);
-		for (line in visibleLines)
-			noteGroup.add(line.field.sustainGroup);
-		for (line in visibleLines)
-			noteGroup.add(line.field.headGroup);
+		// Note layering, per-skin (`skin.tcfg` `holdsOverHeads`) or the global `sustainsOverNotes` option.
+		if (backend.NoteSkinConfig.holdsOverHeads()) {
+			// Over: sustains drawn on top of the receptors and the heads.
+			noteGroup.add(receptorGroup);
+			for (line in visibleLines)
+				noteGroup.add(line.field.headGroup);
+			for (line in visibleLines)
+				noteGroup.add(line.field.sustainGroup);
+		} else {
+			// Under (default): sustains sit at the very back, behind the receptor (press/confirm) and the
+			// head, so a hold looks like it disappears into the note rather than passing over it.
+			for (line in visibleLines)
+				noteGroup.add(line.field.sustainGroup);
+			noteGroup.add(receptorGroup);
+			for (line in visibleLines)
+				noteGroup.add(line.field.headGroup);
+		}
 
 		// Keep note splashes drawn above the notes (the splash group was added during create()).
 		if (grpNoteSplashes != null && noteGroup.members.contains(grpNoteSplashes)) {
@@ -2985,8 +3044,10 @@ class PlayState extends MusicBeatState {
 						line.field.remove(note); // hold finished -- reclaim now
 					else {
 						var hc:Character = data.gfNote ? gf : line.cameraCharacter(); // keep the line's char singing
-						if (hc != null)
+						if (hc != null) {
 							hc.holdTimer = 0;
+							hc.singHold = true;
+						}
 					}
 				}
 			}
@@ -3012,6 +3073,9 @@ class PlayState extends MusicBeatState {
 			// A hit hold scrolls until consumed; complete it at end-time (cpu + human completion).
 			// Early-release for a human is handled in keysCheck where the hold state is fresh.
 			if (data.isSustain() && data.hit) {
+				// A human's non-GH sustain is judged per-segment in keysCheck; skip the one-unit path here.
+				if (!cpuControlled && !guitarHeroSustains)
+					continue;
 				var rec:Receptor = (data.column >= 0 && data.column < playerReceptors.length) ? playerReceptors[data.column] : null;
 				if (songPos >= data.endTime()) {
 					// The bot has no key to release, so drop its receptor back to static here.
@@ -3022,8 +3086,10 @@ class PlayState extends MusicBeatState {
 					playerField.remove(note);
 				} else {
 					var hc:Character = data.gfNote ? gf : boyfriend; // keep singing through the hold
-					if (hc != null)
+					if (hc != null) {
 						hc.holdTimer = 0;
+						hc.singHold = true;
+					}
 					// Keep the receptor lit for the hold's duration (no-op once it's already confirming).
 					if (rec != null) {
 						if (rec.animation.curAnim == null || rec.animation.curAnim.name != 'confirm')
@@ -3036,12 +3102,18 @@ class PlayState extends MusicBeatState {
 
 			if (!data.hit
 				&& !data.missed
+				&& !data.headMissed
 				&& data.mustPress
 				&& !cpuControlled
 				&& !data.ignore
 				&& !endingSong
-				&& songPos - data.time > noteKillOffset)
-				noteMiss(note);
+				&& songPos - data.time > noteKillOffset) {
+				// Non-GH sustain: a missed head is one miss, but the body stays catchable (old behavior).
+				if (data.isSustain() && !guitarHeroSustains)
+					headMissForSustain(note);
+				else
+					noteMiss(note);
+			}
 		}
 
 		// compatibilityMode only: mirror the live v2 state onto the legacy game.notes / strum groups.
@@ -3109,19 +3181,28 @@ class PlayState extends MusicBeatState {
 			if (!anyHeld || endingSong)
 				playerDance();
 
-			// Hold mechanic: a hit sustain whose key is no longer held drops the rest of the trail.
+			// Sustain holds. GH mode: one unit -- releasing early drops the whole remainder as one miss.
+			// Non-GH: the old segmented model -- each step is judged from the live hold state, and the body
+			// stays catchable even after a missed head.
 			if (playerField != null) {
 				var si:Int = playerField.active.length;
 				while (--si >= 0) {
 					var note:ActiveNote = playerField.active[si];
 					var data:NoteData = note.data;
-					if (!data.isSustain() || !data.hit || data.missed)
+					if (!data.isSustain())
 						continue;
-					if (Conductor.songPosition >= data.endTime())
-						continue; // completion handled in updateFields
 					var held:Bool = (data.column >= 0 && data.column < holdArray.length) ? holdArray[data.column] : false;
-					if (!held)
-						sustainRelease(note);
+					if (guitarHeroSustains) {
+						if (!data.hit || data.missed)
+							continue;
+						if (Conductor.songPosition >= data.endTime())
+							continue; // completion handled in updateFields
+						if (!held)
+							sustainRelease(note);
+					} else if (data.hit || data.headMissed) {
+						// Non-GH: judge each body step from the live hold state (health held, miss dropped).
+						updateSegmentedSustain(note, held);
+					}
 				}
 			}
 		}
@@ -3394,6 +3475,74 @@ class PlayState extends MusicBeatState {
 		playerField.remove(note);
 	}
 
+	// Non-GH sustain: the head was missed but the trail stays catchable. Register the single head miss,
+	// drop just the head sprite, and leave the entry alive so `updateSegmentedSustain` keeps judging the
+	// body from the live hold state (matches the pre-v2 runtime where the head and each piece were
+	// independent notes).
+	function headMissForSustain(note:ActiveNote):Void {
+		var data:NoteData = note.data;
+		data.headMissed = true;
+		noteMissCommon(data.column, data);
+		var result:Dynamic = callOnLuas('noteMiss', [-1, data.column, data.type, false]);
+		if (notStopped(result))
+			callOnHScript('noteMiss', [cbArg(note)]);
+		fireStageNote(2, note);
+		playerField.freeHead(note);
+	}
+
+	// Non-GH sustain per-frame judgement (human only; the bot uses the one-unit path in updateFields).
+	// Walks the step-spaced body segments up to now -- a held segment restores health (no combo/score/
+	// accuracy), a dropped one is a full miss -- keeps the receptor lit + character singing while held,
+	// and reclaims the entry once the tail passes.
+	function updateSegmentedSustain(note:ActiveNote, held:Bool):Void {
+		var data:NoteData = note.data;
+		var songPos:Float = Conductor.songPosition;
+		var end:Float = data.endTime();
+
+		if (data.nextTick < 0)
+			data.nextTick = data.time + Conductor.stepCrochet;
+		while (data.nextTick <= songPos && data.nextTick < end) {
+			if (held)
+				sustainSegmentHit(data);
+			else
+				sustainSegmentMiss(note);
+			data.nextTick += Conductor.stepCrochet;
+		}
+
+		if (held) {
+			var hc:Character = data.gfNote ? gf : boyfriend;
+			if (hc != null) {
+				hc.holdTimer = 0;
+				hc.singHold = true;
+			}
+			var rec:Receptor = (data.column >= 0 && data.column < playerReceptors.length) ? playerReceptors[data.column] : null;
+			if (rec != null) {
+				if (rec.animation.curAnim == null || rec.animation.curAnim.name != 'confirm')
+					rec.playAnim('confirm', true);
+				rec.resetAnim = 0;
+			}
+			vocals.volume = 1;
+		}
+
+		if (songPos >= end)
+			playerField.remove(note);
+	}
+
+	// A held body segment: health only, no combo/score/accuracy (the old non-GH model).
+	inline function sustainSegmentHit(data:NoteData):Void {
+		health += data.hitHealth * healthGain;
+	}
+
+	// A dropped body segment: a full miss, exactly like a missed sustain piece in the pre-v2 runtime.
+	function sustainSegmentMiss(note:ActiveNote):Void {
+		var data:NoteData = note.data;
+		noteMissCommon(data.column, data);
+		var result:Dynamic = callOnLuas('noteMiss', [-1, data.column, data.type, true]);
+		if (notStopped(result))
+			callOnHScript('noteMiss', [cbArg(note, true)]);
+		fireStageNote(2, note);
+	}
+
 	// NoteSystem V2
 	function noteMissPress(direction:Int = 1):Void {
 		if (ClientPrefs.data.ghostTapping)
@@ -3651,6 +3800,10 @@ class PlayState extends MusicBeatState {
 			videoCutscene.destroy();
 			videoCutscene = null;
 		}
+		for (vid in precachedVideos)
+			if (vid != null)
+				vid.destroy();
+		precachedVideos.clear();
 		#end
 
 		FlxG.stage.removeEventListener(KeyboardEvent.KEY_DOWN, onKeyPress);

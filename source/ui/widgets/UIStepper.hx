@@ -25,6 +25,9 @@ final class UIStepper extends UIComponent implements ui.input.IUIFocusable {
 	public var min:Float = -1e15;
 	public var max:Float = 1e15;
 	public var decimals:Int = 0;
+
+	/** Text appended after the value (e.g. " ms", "X", "%"); rendered in the box. **/
+	public var suffix:String = "";
 	public var onChange:Float->Void = null;
 	public var fontSize(default, set):Int = 12;
 
@@ -262,10 +265,14 @@ final class UIStepper extends UIComponent implements ui.input.IUIFocusable {
 	}
 
 	function formatValue():String {
+		var s:String;
 		if (decimals <= 0)
-			return Std.string(Std.int(value));
-		var factor:Float = Math.pow(10, decimals);
-		return Std.string(Math.round(value * factor) / factor);
+			s = Std.string(Std.int(value));
+		else {
+			var factor:Float = Math.pow(10, decimals);
+			s = Std.string(Math.round(value * factor) / factor);
+		}
+		return s + suffix;
 	}
 
 	override public function dispose():Void {

@@ -3,6 +3,8 @@ package legacy;
 import objects.notes.NoteField;
 import objects.notes.NoteField.ActiveNote;
 import objects.notes.NoteData;
+import objects.notes.NoteSprite;
+import objects.notes.SustainSprite;
 import objects.notes.Receptor;
 import objects.Note; // = legacy.LegacyNote
 import objects.StrumNote; // = legacy.LegacyStrumNote
@@ -40,6 +42,12 @@ class NoteCompatLayer {
 
 	var strumAdapters:Array<StrumNote> = [];
 	var strumReceptors:Array<Receptor> = [];
+	// Last agreed x/y/alpha/angle per strum adapter, so syncStrums can tell a script write (adapter now
+	// differs) from the untouched pull-from-receptor case and push the change onto the real receptor.
+	var strumPrevX:Array<Float> = [];
+	var strumPrevY:Array<Float> = [];
+	var strumPrevAlpha:Array<Float> = [];
+	var strumPrevAngle:Array<Float> = [];
 
 	final unspawnProxies:Array<UnspawnNoteProxy> = [];
 
@@ -74,7 +82,12 @@ class NoteCompatLayer {
 				continue;
 			for (an in f.active) {
 				aliveThisFrame.set(an, true);
-				mirror(adapterFor(an), an);
+				var a:Note = adapterFor(an);
+				// Two-way: first push any script changes on the adapter back onto the real v2 drawables
+				// (so old `note.x`/`alpha`/`offsetX`/`copyX`... writes take effect), THEN mirror the v2
+				// state back so reads stay accurate. Runs before the next frame's follow() repositions.
+				pushNote(a, an);
+				mirror(a, an);
 			}
 		}
 
@@ -139,6 +152,61 @@ class NoteCompatLayer {
 			a.x = spr.x;
 			a.y = spr.y;
 			a.alpha = spr.alpha;
+		}
+	}
+
+	/**
+		Write-through side of the mirror: copies the follow-input and visual fields a script changed on the
+		legacy adapter onto the live v2 head (and sustain), so pre-v2 scripts that move/fade/re-anchor notes
+		via `game.notes.members[i]` affect the real drawables. Each field is only pushed when it differs from
+		the adapter's construction default, so untouched fields keep the v2 defaults (e.g. the sustain's own
+		dimmer `multAlpha`). Absolute `x`/`y`/`alpha`/`angle` are only pushed when the matching `copy*` flag
+		is off -- otherwise `follow()` owns them, exactly like the legacy `followStrumNote`/`copyX` model.
+		@param a the legacy adapter carrying the script's writes
+		@param note the active v2 note to update
+	**/
+	function pushNote(a:Note, note:ActiveNote):Void {
+		var head:NoteSprite = note.head;
+		if (head != null && head.exists) {
+			if (a.offsetX != 0)
+				head.offsetX = a.offsetX;
+			if (a.offsetY != 0)
+				head.offsetY = a.offsetY;
+			if (a.multSpeed != 1)
+				head.multSpeed = a.multSpeed;
+			if (a.multAlpha != 1)
+				head.multAlpha = a.multAlpha;
+			head.copyX = a.copyX;
+			head.copyY = a.copyY;
+			head.copyAngle = a.copyAngle;
+			head.copyAlpha = a.copyAlpha;
+			// Absolute placement is only honoured with the matching copy flag off; otherwise follow()
+			// owns the axis (exactly the legacy followStrumNote/copyX model).
+			if (!a.copyX)
+				head.x = a.x;
+			if (!a.copyY)
+				head.y = a.y;
+			if (!a.copyAlpha)
+				head.alpha = a.alpha;
+			if (!a.copyAngle)
+				head.angle = a.angle;
+		}
+		// The sustain moves WITH the head: same relative offsets / follow flags, but never the head's
+		// absolute x/y/alpha/angle (the trail sits elsewhere on screen).
+		var sus:SustainSprite = note.sustain;
+		if (sus != null && sus.exists) {
+			if (a.offsetX != 0)
+				sus.offsetX = a.offsetX;
+			if (a.offsetY != 0)
+				sus.offsetY = a.offsetY;
+			if (a.multSpeed != 1)
+				sus.multSpeed = a.multSpeed;
+			if (a.multAlpha != 1)
+				sus.multAlpha = a.multAlpha;
+			sus.copyX = a.copyX;
+			sus.copyY = a.copyY;
+			sus.copyAngle = a.copyAngle;
+			sus.copyAlpha = a.copyAlpha;
 		}
 	}
 
@@ -266,23 +334,37 @@ class NoteCompatLayer {
 			s.active = false;
 			strumAdapters.push(s);
 			strumReceptors.push(rec);
+			strumPrevX.push(rec.x);
+			strumPrevY.push(rec.y);
+			strumPrevAlpha.push(rec.alpha);
+			strumPrevAngle.push(rec.angle);
 			strumLine.add(s);
 			sideGroup.add(s);
 		}
 	}
 
-	/** Mirrors each strum adapter's geometry/state from its live receptor so scripts reading
-		`playerStrums.members[i]` (`x`/`y`/`width`/`downScroll`/…) see the real receptor. Call each frame. **/
+	/**
+		Two-way sync between each strum adapter and its live receptor. `x`/`y`/`alpha`/`angle` are
+		write-through: when a script moved/faded the adapter (its value differs from the last agreed one)
+		that change is pushed onto the real receptor; otherwise the adapter is pulled from the receptor.
+		The geometry reads (`width`/`downScroll`/…) stay pull-only. Call each frame.
+	**/
 	public function syncStrums():Void {
 		for (i in 0...strumAdapters.length) {
 			var s:StrumNote = strumAdapters[i];
 			var rec:Receptor = strumReceptors[i];
 			if (s == null || rec == null)
 				continue;
-			s.x = rec.x;
-			s.y = rec.y;
-			s.alpha = rec.alpha;
-			s.angle = rec.angle;
+
+			var fx:Float = (s.x != strumPrevX[i]) ? s.x : rec.x;
+			var fy:Float = (s.y != strumPrevY[i]) ? s.y : rec.y;
+			var fa:Float = (s.alpha != strumPrevAlpha[i]) ? s.alpha : rec.alpha;
+			var fang:Float = (s.angle != strumPrevAngle[i]) ? s.angle : rec.angle;
+			rec.x = s.x = strumPrevX[i] = fx;
+			rec.y = s.y = strumPrevY[i] = fy;
+			rec.alpha = s.alpha = strumPrevAlpha[i] = fa;
+			rec.angle = s.angle = strumPrevAngle[i] = fang;
+
 			s.width = rec.width;
 			s.height = rec.height;
 			s.downScroll = rec.downScroll;
@@ -299,6 +381,10 @@ class NoteCompatLayer {
 				s.destroy();
 		strumAdapters = [];
 		strumReceptors = [];
+		strumPrevX = [];
+		strumPrevY = [];
+		strumPrevAlpha = [];
+		strumPrevAngle = [];
 		for (p in unspawnProxies)
 			if (p != null)
 				p.destroy();

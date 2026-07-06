@@ -316,6 +316,7 @@ class FreeplayState extends MusicBeatState {
 		}
 		if (added)
 			weekNames[freeplayWeek] = 'Other Songs';
+		backend.difficulty.ChartScanCache.commit(); // persist any newly-scanned names in one write
 		#end
 	}
 
@@ -331,18 +332,21 @@ class FreeplayState extends MusicBeatState {
 	}
 
 	function chartSongName(chartPath:String, fallback:String):String {
-		try {
-			var data:Dynamic = tjson.TJSON.parse(File.getContent(chartPath));
-			var sub:Dynamic = Reflect.field(data, 'song');
-			if (sub != null) {
-				if (Std.isOfType(sub, String))
-					return sub;
-				var inner:Dynamic = Reflect.field(sub, 'song');
-				if (inner != null)
-					return Std.string(inner);
-			}
-		} catch (error:Dynamic) {}
-		return fallback;
+		// cache-first by file signature: an unchanged chart skips the whole-file parse below
+		return backend.difficulty.ChartScanCache.songName(chartPath, function():String {
+			try {
+				var data:Dynamic = tjson.TJSON.parse(File.getContent(chartPath));
+				var sub:Dynamic = Reflect.field(data, 'song');
+				if (sub != null) {
+					if (Std.isOfType(sub, String))
+						return sub;
+					var inner:Dynamic = Reflect.field(sub, 'song');
+					if (inner != null)
+						return Std.string(inner);
+				}
+			} catch (error:Dynamic) {}
+			return fallback;
+		});
 	}
 	#end
 

@@ -20,6 +20,12 @@ final class SustainSprite extends FlxSprite {
 	public var column:Int = 0;
 	public var keyCount:Int = 4;
 
+	/** Per-skin override of `headOverlap` (from `skin.tcfg`); `null` uses the static default. **/
+	public var skinHeadOverlap:Null<Float> = null;
+
+	/** `false` when the active skin ships no hold-end (tail) frame; the body then fills the tail's span. **/
+	public var hasTail:Bool = true;
+
 	public var tail:FlxSprite;
 
 	public var rgbShader:RGBShaderReference;
@@ -53,6 +59,29 @@ final class SustainSprite extends FlxSprite {
 		}
 		return value;
 	}
+
+	/**
+		How far a hold's visual end is pulled back toward its head, as a fraction of the note half-width
+		(`Mania.swagWidth / 2`), so the tail cap tucks in short of the next note instead of reaching its
+		centre. `0` restores the exact end-time tip; `1` stops the cap at the next note's leading edge.
+		Clamped per hold so the cap always fits (the body never goes negative).
+	**/
+	public static var endTrimRatio:Float = 1.0;
+
+	/**
+		Extra pull of a held hold's clip toward the receptor, as a fraction of the note width, so the
+		trail overlaps the receptor slightly instead of leaving a visible gap above it. `0` cuts exactly
+		at the head; larger values tuck the trail further down over the receptor.
+	**/
+	public static var holdClipNudge:Float = 0.5;
+
+	/**
+		Extends an un-held hold's head-side edge up under the note head by this fraction of the note width,
+		closing the seam between the head and the trail while it scrolls. `0` starts the body exactly at the
+		head. Once the hold is hit, the held clip (`holdClipNudge`) governs the receptor-side edge instead,
+		so this only affects the un-held (approaching / opponent-side) trail.
+	**/
+	public static var headOverlap:Float = 0.5;
 
 	public var offsetX:Float = 0;
 	public var offsetY:Float = 0;
@@ -101,6 +130,7 @@ final class SustainSprite extends FlxSprite {
 		this.data = data;
 		this.column = data.column;
 		this.keyCount = keyCount;
+		skinHeadOverlap = backend.NoteSkinConfig.headOverlap();
 
 		exists = visible = active = true;
 		tail.exists = tail.visible = true;
@@ -118,7 +148,9 @@ final class SustainSprite extends FlxSprite {
 		else
 			tailRGB.reset(tail, NoteDefaults.initializeGlobalRGBShader(column));
 
-		if (data.texture != null && data.texture.length > 0) {
+		// Force Selected Skin blocks a PLAIN note's hold-texture override; a custom-type note keeps it.
+		var forceSkip:Bool = ClientPrefs.data.forceNoteSkin && (data.type == null || data.type == '');
+		if (!forceSkip && data.texture != null && data.texture.length > 0) {
 			// Per-note custom hold graphic (matches the head's data.texture); route through the setter.
 			@:bypassAccessor texture = null;
 			texture = data.texture;
@@ -127,7 +159,13 @@ final class SustainSprite extends FlxSprite {
 			pixel = PlayState.isPixelStage;
 		} else {
 			@:bypassAccessor texture = null;
+			// Force Selected Skin: pin the active skin's asset resolution to its owner (mods can't shadow it).
+			var prevPin:Null<String> = Paths.pinModRoot;
+			var pin:Null<String> = backend.NoteSkinConfig.activeSkinPinRoot();
+			if (pin != null)
+				Paths.pinModRoot = pin;
 			var v:NoteVisual = NoteSkinService.current().applySustain(this, rgbShader, tail, tailRGB, column, keyCount);
+			Paths.pinModRoot = prevPin;
 			offsetX = v.offsetX;
 			offsetY = v.offsetY;
 			centerOnStrum = v.centerOnStrum;
@@ -137,6 +175,11 @@ final class SustainSprite extends FlxSprite {
 			rgbShader.enabled = false;
 			tailRGB.enabled = false;
 		}
+
+		// No hold-end frame in the skin -> the body extends over the tail's span instead of stopping short.
+		var endAnim = tail.animation.getByName('end');
+		hasTail = (endAnim != null && endAnim.numFrames > 0);
+		tail.visible = hasTail;
 
 		alpha = multAlpha = 0.6;
 		tail.alpha = alpha;
@@ -184,14 +227,34 @@ final class SustainSprite extends FlxSprite {
 
 		var headDist:Float = sign * (0.45 * (scrollNow - data.scrollPos) * rate);
 		var endDist:Float = sign * (0.45 * (scrollNow - data.endScrollPos) * rate);
+
+		// Missing hold-end: no tail length is reserved, so the body reaches where the tail would have ended.
+		var tailLen:Float = hasTail ? tail.height : 0;
+		var totalLen:Float = Math.abs(headDist - endDist);
+
+		var trim:Float = Mania.swagWidth * 0.5 * endTrimRatio;
+		var maxTrim:Float = totalLen - tailLen;
+		if (maxTrim < 0)
+			maxTrim = 0;
+		if (trim > maxTrim)
+			trim = maxTrim;
+		endDist += sign * trim;
+		totalLen -= trim;
+
 		var nearA:Float = offsetY + headDist;
 		var farA:Float = offsetY + endDist;
-
-		var tailLen:Float = tail.height;
-		var totalLen:Float = Math.abs(headDist - endDist);
 		var bodyLen:Float = totalLen - tailLen;
 		if (bodyLen < 0)
 			bodyLen = 0;
+
+		// Un-held trail: push the head-side edge up under the note head to close the seam. The far (tail)
+		// edge stays put. Skipped once hit -- the held clip owns the receptor-side edge from then on.
+		var ho:Float = (skinHeadOverlap != null) ? skinHeadOverlap : headOverlap;
+		if (data != null && !data.hit && ho != 0) {
+			var headOver:Float = Mania.swagWidth * ho;
+			nearA += sign * headOver;
+			bodyLen += headOver;
+		}
 		// bodyLen is constant while scrolling (headDist - endDist reduces to 0.45*rate*(endScrollPos -
 		// scrollPos), independent of scrollNow), so scale.y only really moves on spawn/speed change and
 		// while a held note clips. Only pay updateHitbox when it actually changed (legacy's 0.1px gate);
@@ -221,32 +284,25 @@ final class SustainSprite extends FlxSprite {
 		tail.x = tcx - tail.width / 2;
 		tail.y = tcy - tail.height / 2;
 
-		clip(strum, scrollNow);
+		clip(sign * headDist - Mania.swagWidth * holdClipNudge, bodyLen);
 	}
 
 	/**
-		Clips away the consumed portion of the body once the head has been hit. Because the body is
-		`flipY`'d for downscroll, the receptor-side region maps to the same frame slice either way:
-		hide the first `frac` of the frame and keep the rest. `frac` is measured in scroll position so
-		it stays correct through SV (equals the raw time fraction when SV is off).
-		@param strum the receptor this hold scrolls toward (its `downScroll` selects the clip side)
-		@param scrollNow the SV-mapped position of the current song time
+		Clips away the consumed portion of the body once the head has been hit, anchored to the receptor
+		so the cut edge stays put instead of drifting past it as the hold shrinks. The hidden fraction is
+		measured against the ACTUAL body sprite (`consumed / bodyLen`), NOT the full hold span -- the span
+		includes the tail cap and the end-trim, so dividing by it under-clips and the near edge creeps past
+		the receptor. Because the body is `flipY`'d for downscroll, hiding the first `frac` of the frame
+		removes the receptor-side region in both scroll directions.
+		@param consumed how far the head has scrolled past the receptor, in screen px (negative = not yet)
+		@param bodyLen the body's on-screen length, in screen px
 	**/
-	public function clip(strum:Receptor, scrollNow:Float):Void {
-		if (data == null || !data.hit || data.length <= 0) {
+	public function clip(consumed:Float, bodyLen:Float):Void {
+		if (data == null || !data.hit || data.length <= 0 || bodyLen <= 0 || consumed <= 0) {
 			clipRect = null;
 			return;
 		}
-		var span:Float = data.endScrollPos - data.scrollPos;
-		if (span == 0) {
-			clipRect = null;
-			return;
-		}
-		var frac:Float = (scrollNow - data.scrollPos) / span;
-		if (frac <= 0) {
-			clipRect = null;
-			return;
-		}
+		var frac:Float = consumed / bodyLen;
 		if (frac > 1)
 			frac = 1;
 

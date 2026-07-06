@@ -16,7 +16,6 @@ class MasterEditorMenu extends MusicBeatState {
 		'Dialogue Editor',
 		'Dialogue Portrait Editor',
 		'Note Splash Editor',
-		'Note Skin Editor',
 		'UI Skin Editor',
 		'Benchmark'
 	];

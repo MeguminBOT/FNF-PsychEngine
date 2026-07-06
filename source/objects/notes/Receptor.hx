@@ -102,7 +102,14 @@ final class Receptor extends FlxSprite {
 		laneCenter = false;
 		colorPerAnim = false;
 
+		// Pin asset resolution to the active skin's owner so a folder skin in any mod (or a forced skin)
+		// builds its strums from its own images -- matches NoteSprite/SustainSprite.apply.
+		var prevPin:Null<String> = Paths.pinModRoot;
+		var pin:Null<String> = backend.NoteSkinConfig.activeSkinPinRoot();
+		if (pin != null)
+			Paths.pinModRoot = pin;
 		var v:NoteVisual = NoteSkinService.current().applyReceptor(this, rgbShader, column, keyCount, lastAnim);
+		Paths.pinModRoot = prevPin;
 		laneCenter = v.laneCenter;
 		colorPerAnim = v.colorPerAnim;
 		staticColorable = v.staticColorable;

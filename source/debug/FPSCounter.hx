@@ -218,7 +218,7 @@ class FPSCounter extends TextField {
 			return;
 		}
 
-		currentFPS = timesCount < FlxG.updateFramerate ? timesCount : FlxG.updateFramerate;
+		currentFPS = timesCount < FlxG.drawFramerate ? timesCount : FlxG.drawFramerate;
 		updateText();
 		deltaTimeout = 0.0;
 	}
@@ -232,7 +232,7 @@ class FPSCounter extends TextField {
 			updatePosition();
 		}
 
-		final col:Int = (currentFPS < FlxG.drawFramerate * 0.5) ? WARN_COLOR : baseColor;
+		final col:Int = (currentFPS < Math.min(FlxG.drawFramerate, FlxG.updateFramerate) * 0.5) ? WARN_COLOR : baseColor;
 		if (lastColor != col && text.length > 0) {
 			lastColor = col;
 			textColor = col;

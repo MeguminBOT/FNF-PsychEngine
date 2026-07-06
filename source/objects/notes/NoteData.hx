@@ -76,6 +76,12 @@ final class NoteData {
 	/** Set when a sustain's key is released before the hold finished. **/
 	public var holdReleased:Bool = false;
 
+	/** Non-GH segmented sustain: the head was missed but the body is still catchable by holding. **/
+	public var headMissed:Bool = false;
+
+	/** Non-GH segmented sustain: time of the next body segment to judge (`-1` until the head resolves). **/
+	public var nextTick:Float = -1;
+
 	public var rating:String = 'unknown';
 	public var ratingMod:Float = 0;
 	public var ratingDisabled:Bool = false;

@@ -8,6 +8,7 @@ import editors.charting.audio.IChartAudio;
 import editors.charting.data.ChartEditorModel;
 import editors.charting.data.ClipboardModel;
 import editors.charting.data.EditorKeybinds;
+import editors.charting.data.ChartPattern;
 import editors.charting.data.EditorPrefs;
 import editors.charting.data.SelectionModel;
 import editors.charting.data.SnapGrid;
@@ -91,6 +92,9 @@ class ChartingState extends MusicBeatState {
 	/** The section the panels operate on. **/
 	public var editSection(default, null):Int = 0;
 
+	/** How many sections back "Copy From" pulls notes from (1 = the previous section). **/
+	var copyFromBack:Int = 4;
+
 	// 1x = square cells with the full section in view; higher zooms stretch rows for fine editing.
 	static final ZOOM_LABELS:Array<String> = ["0.25x", "0.5x", "1x", "2x", "3x", "4x", "6x", "8x", "12x", "16x", "24x"];
 	static final ZOOM_VALUES:Array<Float> = [0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 16, 24];
@@ -108,7 +112,8 @@ class ChartingState extends MusicBeatState {
 		"Display",
 		"Options",
 		"Character",
-		"Strumlines"
+		"Strumlines",
+		"Patterns"
 	];
 
 	/** Metronome sound presets (name shown in Options, sound asset, accent pitch). **/
@@ -121,6 +126,18 @@ class ChartingState extends MusicBeatState {
 
 	/** How many strumlines may render lanes at once. **/
 	static inline var MAX_VISIBLE_LINES:Int = 6;
+
+	/** Time-signature denominators the engine actually supports (only powers of 2 keep 16/d an
+		integer step-per-beat; anything else is unsupported, so the pickers are limited to these). **/
+	static final VALID_DENOMINATORS:Array<Int> = [1, 2, 4, 8, 16];
+
+	static final DENOMINATOR_LABELS:Array<String> = ['1', '2', '4', '8', '16'];
+
+	/** Index into `VALID_DENOMINATORS` for a denominator (falls back to 4). **/
+	static function denomIndex(d:Int):Int {
+		var idx:Int = VALID_DENOMINATORS.indexOf(d);
+		return (idx >= 0) ? idx : 2;
+	}
 
 	var zoomIndex:Int = 2;
 	var rateIndex:Int = 3;
@@ -147,7 +164,7 @@ class ChartingState extends MusicBeatState {
 	var altCheck:UICheckbox;
 	var bpmStep:UIStepper;
 	var beatsStep:UIStepper;
-	var denomStep:UIStepper;
+	var denomDrop:UIDropdown;
 	var speedStep:UIStepper;
 	var velStep:UIStepper;
 	var keysStep:UIStepper;
@@ -168,6 +185,14 @@ class ChartingState extends MusicBeatState {
 	var playStartMs:Float = 0;
 	var nextHitIndex:Int = 0;
 	var lastMetroKey:Int = -1;
+
+	/** Patterns rail: selected pattern, its length in snap steps, and the target strumline (-1 = auto). **/
+	var patternId:Int = 0;
+	var patternLength:Int = 8;
+	var patternLine:Int = -1;
+
+	/** When on, clicking the grid drops the selected pattern instead of placing a single note. **/
+	var patternArmed:Bool = false;
 
 	final fileDialog:FileDialogHandler = new FileDialogHandler();
 
@@ -192,6 +217,7 @@ class ChartingState extends MusicBeatState {
 
 		EditorPrefs.load();
 		EditorKeybinds.init();
+		applyThemeFromPrefs();
 
 		snap = new SnapGrid();
 		snap.select(EditorPrefs.snapIndex);
@@ -243,7 +269,7 @@ class ChartingState extends MusicBeatState {
 		wireChrome();
 		buildRightDock();
 		shell.rail.setTabs(railTabs());
-		shell.rail.onSelect = function(tab:Int):Void buildLeftPanel(tab);
+		shell.rail.onSelect = function(_:Int):Void buildLeftPanel(currentPanel());
 		shell.rail.select(1);
 
 		noteField = new EditorNoteField(model, selection, shell.fieldX, shell.fieldY, shell.fieldW, shell.fieldH);
@@ -252,7 +278,7 @@ class ChartingState extends MusicBeatState {
 		noteField.maxTime = audio.loaded ? audio.length : -1;
 		noteField.typeIndexOf = function(t:String):Int return noteTypesList.indexOf(t);
 		noteField.waveEnabled = EditorPrefs.waveform;
-		noteField.waveSource = audio.waveformSound(EditorPrefs.waveTarget);
+		applyWaveConfig();
 		noteField.vortexEnabled = EditorPrefs.vortex;
 		add(noteField.group);
 		add(noteField.overlay);
@@ -448,7 +474,7 @@ class ChartingState extends MusicBeatState {
 		altCheck.checked = model.sectionAltState(sec);
 		bpmStep.value = model.bpmAt(sec);
 		beatsStep.value = model.beatsAt(sec);
-		denomStep.value = model.denominatorAt(sec);
+		denomDrop.select(denomIndex(model.denominatorAt(sec)));
 		speedStep.value = model.chart.speed;
 		velStep.value = model.velocityAt(sec);
 		keysStep.value = model.keyCountAt(sec);
@@ -497,6 +523,9 @@ class ChartingState extends MusicBeatState {
 		shell.snapChip.onClick = wrapSnap;
 		shell.zoomChip.onClick = wrapZoom;
 		shell.rateChip.onClick = wrapRate;
+		shell.snapChip.onRightClick = openSnapMenu;
+		shell.zoomChip.onRightClick = openZoomMenu;
+		shell.rateChip.onRightClick = openRateMenu;
 
 		shell.prevBtn.onClick = function():Void gotoSection(editSection - 1);
 		shell.nextBtn.onClick = function():Void gotoSection(editSection + 1);
@@ -506,7 +535,7 @@ class ChartingState extends MusicBeatState {
 		shell.timeline.onScrub = onTimelineScrub;
 
 		shell.searchBtn.onClick = todo("Search isn't implemented yet");
-		shell.optionsBtn.onClick = function():Void shell.rail.select(7);
+		shell.optionsBtn.onClick = function():Void selectPanel(7);
 	}
 
 	/** The timeline's full span: audio length when loaded, else the chart end. **/
@@ -594,6 +623,8 @@ class ChartingState extends MusicBeatState {
 		while (nextHitIndex < list.length && list[nextHitIndex].time <= t) {
 			var note:SongNote = list[nextHitIndex];
 			nextHitIndex++;
+			// vortex receptors light up as their notes cross the playhead
+			noteField.confirmForNote(note.strumLine, note.column);
 			if (!EditorPrefs.hitsounds)
 				continue;
 			var isPlayer:Bool = (note.strumLine >= 0 && note.strumLine < lines.length) && lines[note.strumLine].isPlayer;
@@ -609,23 +640,51 @@ class ChartingState extends MusicBeatState {
 		}
 	}
 
-	/** The rail tab set: the 8 standard tabs, plus CHAR/STRM in combined-dock mode. **/
+	/** Rail-position -> panel index (`TAB_NAMES`); rebuilt by `railTabs`. Rail positions and panel
+		indices differ because Events/Audio/Display tabs are dropped when the right dock is shown. **/
+	final railPanelMap:Array<Int> = [];
+
+	/**
+		The rail tab set. Events/Audio/Display already live in the right dock, so they only appear as
+		rail tabs in combined-dock mode (where the right dock is folded away); CHAR/STRM likewise.
+	**/
 	function railTabs():Array<UIRailTab> {
-		var tabs:Array<UIRailTab> = [
-			{caption: "SONG", tooltipFallback: "Song"},
-			{caption: "SECT", tooltipFallback: "Section"},
-			{caption: "EVNT", tooltipFallback: "Events"},
-			{caption: "DATA", tooltipFallback: "Data"},
-			{caption: "AUDI", tooltipFallback: "Audio"},
-			{caption: "META", tooltipFallback: "Meta"},
-			{caption: "DISP", tooltipFallback: "Display"},
-			{caption: "OPTS", tooltipFallback: "Options"}
-		];
+		railPanelMap.resize(0);
+		var tabs:Array<UIRailTab> = [];
+		function add(panel:Int, caption:String, tip:String):Void {
+			tabs.push({caption: caption, tooltipFallback: tip});
+			railPanelMap.push(panel);
+		}
+		add(0, "SONG", "Song");
+		add(1, "SECT", "Section");
+		if (EditorPrefs.combinedDock)
+			add(2, "EVNT", "Events");
+		add(3, "DATA", "Data");
+		if (EditorPrefs.combinedDock)
+			add(4, "AUDI", "Audio");
+		add(5, "META", "Meta");
+		if (EditorPrefs.combinedDock)
+			add(6, "DISP", "Display");
+		add(10, "PTRN", "Patterns");
+		add(7, "OPTS", "Options");
 		if (EditorPrefs.combinedDock) {
-			tabs.push({caption: "CHAR", tooltipFallback: "Character"});
-			tabs.push({caption: "STRM", tooltipFallback: "Strumlines"});
+			add(8, "CHAR", "Character");
+			add(9, "STRM", "Strumlines");
 		}
 		return tabs;
+	}
+
+	/** The panel index behind the currently-selected rail position. **/
+	inline function currentPanel():Int {
+		var pos:Int = shell.rail.selectedIndex;
+		return (pos >= 0 && pos < railPanelMap.length) ? railPanelMap[pos] : 0;
+	}
+
+	/** Selects the rail tab that shows a given panel (no-op if it isn't currently on the rail). **/
+	function selectPanel(panel:Int):Void {
+		var pos:Int = railPanelMap.indexOf(panel);
+		if (pos >= 0)
+			shell.rail.select(pos);
 	}
 
 	function cycleSnap(dir:Int):Void {
@@ -670,6 +729,38 @@ class ChartingState extends MusicBeatState {
 		audio.setRate(RATE_VALUES[rateIndex]);
 	}
 
+	/** Right-click a value chip: a checkable list of every option, picked directly. **/
+	function openSnapMenu():Void {
+		var items:Array<UIMenuItem> = [];
+		for (i in 0...SnapGrid.SNAPS.length) {
+			var idx:Int = i;
+			items.push({label: '1/${SnapGrid.SNAPS[i]}', checked: (i == snap.index), onSelect: function():Void {
+				snap.select(idx);
+				EditorPrefs.snapIndex = snap.index;
+				shell.snapChip.label = 'Snap ${snap.label()}';
+			}});
+		}
+		UIContextMenu.open(FlxG.mouse.x, FlxG.mouse.y, items);
+	}
+
+	function openZoomMenu():Void {
+		var items:Array<UIMenuItem> = [];
+		for (i in 0...ZOOM_LABELS.length) {
+			var idx:Int = i;
+			items.push({label: ZOOM_LABELS[i], checked: (i == zoomIndex), onSelect: function():Void setZoomIndex(idx)});
+		}
+		UIContextMenu.open(FlxG.mouse.x, FlxG.mouse.y, items);
+	}
+
+	function openRateMenu():Void {
+		var items:Array<UIMenuItem> = [];
+		for (i in 0...RATE_LABELS.length) {
+			var idx:Int = i;
+			items.push({label: RATE_LABELS[i], checked: (i == rateIndex), onSelect: function():Void setRateIndex(idx)});
+		}
+		UIContextMenu.open(FlxG.mouse.x, FlxG.mouse.y, items);
+	}
+
 	/** Restores the previous snapshot and refreshes everything that may hold stale references. **/
 	function performUndo():Void {
 		var label:String = undoStack.undo(model);
@@ -697,6 +788,7 @@ class ChartingState extends MusicBeatState {
 		return appendCustom("File", [
 			{label: "New Chart", shortcut: EditorKeybinds.bindLabel('new_chart'), onSelect: newChart},
 			{label: "Open...", shortcut: EditorKeybinds.bindLabel('open'), onSelect: openChartDialog},
+			{label: "Reload From Disk", onSelect: reloadChart},
 			{label: "Open Autosave", onSelect: openNewestAutosave},
 			{separator: true},
 			{label: "Save", shortcut: EditorKeybinds.bindLabel('save'), onSelect: function():Void saveChart(false)},
@@ -776,7 +868,7 @@ class ChartingState extends MusicBeatState {
 	function toolsMenu():Array<UIMenuItem> {
 		return appendCustom("Tools", [
 			{label: "Keybinds...", onSelect: openKeybindsModal},
-			{label: "Adapt Notes...", onSelect: todo("Note adapt modes aren't implemented yet")},
+			{label: "Adapt Notes to Snap", onSelect: adaptNotesToSnap},
 			{separator: true},
 			{label: "Legacy Chart Editor", onSelect: openLegacyEditor}
 		]);
@@ -821,7 +913,7 @@ class ChartingState extends MusicBeatState {
 		noteField.waveSource = audio.waveformSound(EditorPrefs.waveTarget);
 		noteField.onModelChanged();
 		noteField.setViewTime(0);
-		buildLeftPanel(shell.rail.selectedIndex);
+		buildLeftPanel(currentPanel());
 		if (!EditorPrefs.combinedDock)
 			buildRightDock();
 		refreshSongLabel();
@@ -1026,6 +1118,35 @@ class ChartingState extends MusicBeatState {
 		});
 	}
 
+	/** Re-reads the current chart from its file on disk, discarding unsaved edits. **/
+	function reloadChart():Void {
+		var path:String = backend.Song.chartPath;
+		if (path == null || path.length == 0) {
+			UIToast.show('Nothing to reload (chart was never saved to a file)');
+			return;
+		}
+		#if sys
+		try {
+			if (!sys.FileSystem.exists(path)) {
+				UIToast.show('File not found: $path');
+				return;
+			}
+			var raw:String = sys.io.File.getContent(path);
+			var loaded:SongChart = backend.Song.parseJSON(raw, path);
+			if (loaded == null || loaded.sections.length == 0) {
+				UIToast.show('Not a valid chart file');
+				return;
+			}
+			backend.Song.loadedSongName = loaded.song;
+			adoptChart(loaded);
+			UIToast.show('Reloaded: ${loaded.song}');
+		} catch (e:Dynamic)
+			UIToast.show('Error reloading: $e');
+		#else
+		UIToast.show('Reload is unavailable on this platform');
+		#end
+	}
+
 	function pasteAtSection():Void {
 		if (!clipboard.hasContent) {
 			UIToast.show('Clipboard is empty');
@@ -1092,7 +1213,7 @@ class ChartingState extends MusicBeatState {
 		if (!on)
 			buildRightDock();
 		shell.rail.setTabs(railTabs());
-		buildLeftPanel(shell.rail.selectedIndex);
+		buildLeftPanel(currentPanel());
 		if (noteField != null)
 			noteField.resize(shell.fieldX, shell.fieldY, shell.fieldW, shell.fieldH);
 	}
@@ -1282,7 +1403,7 @@ class ChartingState extends MusicBeatState {
 		altCheck = null;
 		bpmStep = null;
 		beatsStep = null;
-		denomStep = null;
+		denomDrop = null;
 		speedStep = null;
 		velStep = null;
 		keysStep = null;
@@ -1322,6 +1443,8 @@ class ChartingState extends MusicBeatState {
 				buildCharacterSection(flow, colW);
 			case 9:
 				buildStrumlinesSection(flow, colW);
+			case 10:
+				buildPatternsPanel(flow, colW);
 			default:
 				flow.header(new UIAccordion(TAB_NAMES[tabIndex], colW));
 				addHintRow(flow, colW, 'Nothing here yet.');
@@ -1352,7 +1475,7 @@ class ChartingState extends MusicBeatState {
 
 		var bpm:UIStepper = new UIStepper("Base BPM", colW, chart.bpm, 1, function(v:Float):Void {
 			undoStack.snapshotCoalesced(model, 'BPM');
-			model.setBpm(0, v);
+			model.setBpm(0, v, EditorPrefs.bpmAdapt);
 		});
 		bpm.min = 1;
 		bpm.max = 999;
@@ -1402,20 +1525,21 @@ class ChartingState extends MusicBeatState {
 
 		var beats:UIStepper = new UIStepper("Beats", colW, model.beatsAt(0), 1, function(v:Float):Void {
 			undoStack.snapshotCoalesced(model, 'Time Signature');
-			model.setBeats(0, v);
+			model.setBeats(0, v, EditorPrefs.timeSigAdapt);
 		});
 		beats.tooltip = "Base time signature numerator";
 		beats.min = 1;
 		beats.max = 16;
 		flow.add(beats);
 
-		var denom:UIStepper = new UIStepper("Denominator", colW, model.denominatorAt(0), 1, function(v:Float):Void {
-			undoStack.snapshotCoalesced(model, 'Time Signature');
-			model.setDenominator(0, Std.int(v));
+		var denom:UIDropdown = new UIDropdown("Denominator", colW, function(index:Int, _:String):Void {
+			undoStack.snapshot(model, 'Time Signature');
+			model.setDenominator(0, VALID_DENOMINATORS[index], EditorPrefs.timeSigAdapt);
 		});
 		denom.tooltip = "Base time signature denominator";
-		denom.min = 1;
-		denom.max = 32;
+		denom.boxWidth = UITheme.px(90);
+		denom.setItems(DENOMINATOR_LABELS);
+		denom.select(denomIndex(model.denominatorAt(0)));
 		flow.add(denom);
 
 		flow.header(new UIAccordion("Characters", colW));
@@ -1443,7 +1567,7 @@ class ChartingState extends MusicBeatState {
 			applyAudioVolumes();
 			audio.setRate(RATE_VALUES[rateIndex]);
 			noteField.maxTime = audio.loaded ? audio.length : -1;
-			noteField.waveSource = audio.waveformSound(EditorPrefs.waveTarget);
+			applyWaveConfig();
 			UIToast.show(audio.loaded ? 'Audio loaded' : 'No audio found for "${model.chart.song}"');
 			updateTimeLabel();
 		}));
@@ -1644,6 +1768,53 @@ class ChartingState extends MusicBeatState {
 		flow.add(new UIButton("Keybinds...", colW, UITheme.px(28), openKeybindsModal));
 		flow.add(new UIButton("Open Autosave", colW, UITheme.px(28), openNewestAutosave));
 		flow.add(new UICheckbox("Combined Dock", colW, EditorPrefs.combinedDock, function(v:Bool):Void setCombinedDock(v)));
+		var snapGhost:UICheckbox = new UICheckbox("Snap Region Marker", colW, EditorPrefs.snapRegionGhost,
+			function(v:Bool):Void EditorPrefs.snapRegionGhost = v);
+		snapGhost.tooltip = "Highlight every grid cell the current snap covers under the cursor";
+		flow.add(snapGhost);
+
+		flow.header(new UIAccordion("Note Adaptation", colW));
+		var adaptLabels:Array<String> = ["Keep (ms)", "Rescale", "Snap"];
+		var bpmAdapt:UIDropdown = new UIDropdown("BPM Change", colW, function(i:Int, _:String):Void EditorPrefs.bpmAdapt = i);
+		bpmAdapt.boxWidth = UITheme.px(120);
+		bpmAdapt.setItems(adaptLabels);
+		bpmAdapt.select(clampIndex(EditorPrefs.bpmAdapt, adaptLabels.length));
+		bpmAdapt.tooltip = "How existing notes react when you change BPM";
+		flow.add(bpmAdapt);
+		var tsAdapt:UIDropdown = new UIDropdown("Time Sig Change", colW, function(i:Int, _:String):Void EditorPrefs.timeSigAdapt = i);
+		tsAdapt.boxWidth = UITheme.px(120);
+		tsAdapt.setItems(adaptLabels);
+		tsAdapt.select(clampIndex(EditorPrefs.timeSigAdapt, adaptLabels.length));
+		tsAdapt.tooltip = "How existing notes react when you change beats or denominator";
+		flow.add(tsAdapt);
+
+		flow.header(new UIAccordion("Theme", colW));
+		var themeDrop:UIDropdown = new UIDropdown("Preset", colW, function(index:Int, _:String):Void {
+			EditorPrefs.themePreset = index;
+			applyThemeFromPrefs();
+			EditorPrefs.save();
+		});
+		themeDrop.boxWidth = UITheme.px(120);
+		themeDrop.setItems([for (p in ui.UITheme.PRESETS) p.name]);
+		themeDrop.select(clampIndex(EditorPrefs.themePreset, ui.UITheme.PRESETS.length));
+		themeDrop.tooltip = "Base colour scheme (Light mode included)";
+		flow.add(themeDrop);
+		var accentHex:UITextInput = new UITextInput("Accent (hex)", colW,
+			(EditorPrefs.accentOverride >= 0) ? StringTools.hex(EditorPrefs.accentOverride, 6) : '', function(v:String):Void {
+				var col:Int = parseHexColor(v);
+				if (StringTools.trim(v).length == 0) {
+					EditorPrefs.accentOverride = -1;
+					applyThemeFromPrefs();
+					EditorPrefs.save();
+				} else if (col >= 0) {
+					EditorPrefs.accentOverride = col;
+					ui.UITheme.applyAccent(col);
+					EditorPrefs.save();
+				}
+			});
+		accentHex.boxWidth = UITheme.px(100);
+		accentHex.tooltip = "Custom accent colour, e.g. 8A5EE0 (blank = use the preset's accent)";
+		flow.add(accentHex);
 
 		flow.header(new UIAccordion("Metronome", colW));
 		var metroDrop:UIDropdown = new UIDropdown("Sound", colW, function(index:Int, _:String):Void EditorPrefs.metroPreset = index);
@@ -1697,7 +1868,7 @@ class ChartingState extends MusicBeatState {
 
 		bpmStep = new UIStepper("BPM", colW, 150, 1, function(v:Float):Void {
 			undoStack.snapshotCoalesced(model, 'BPM');
-			model.setBpm(editSection, v);
+			model.setBpm(editSection, v, EditorPrefs.bpmAdapt);
 		});
 		bpmStep.tooltip = "Inherited from the previous section until changed";
 		bpmStep.min = 1;
@@ -1707,21 +1878,22 @@ class ChartingState extends MusicBeatState {
 
 		beatsStep = new UIStepper("Beats", colW, 4, 1, function(v:Float):Void {
 			undoStack.snapshotCoalesced(model, 'Time Signature');
-			model.setBeats(editSection, v);
+			model.setBeats(editSection, v, EditorPrefs.timeSigAdapt);
 		});
 		beatsStep.tooltip = "Time signature numerator (inherited until changed)";
 		beatsStep.min = 1;
 		beatsStep.max = 16;
 		flow.add(beatsStep);
 
-		denomStep = new UIStepper("Denominator", colW, 4, 1, function(v:Float):Void {
-			undoStack.snapshotCoalesced(model, 'Time Signature');
-			model.setDenominator(editSection, Std.int(v));
+		denomDrop = new UIDropdown("Denominator", colW, function(index:Int, _:String):Void {
+			undoStack.snapshot(model, 'Time Signature');
+			model.setDenominator(editSection, VALID_DENOMINATORS[index], EditorPrefs.timeSigAdapt);
 		});
-		denomStep.tooltip = "Time signature denominator (inherited until changed)";
-		denomStep.min = 1;
-		denomStep.max = 32;
-		flow.add(denomStep);
+		denomDrop.tooltip = "Time signature denominator (inherited until changed)";
+		denomDrop.boxWidth = UITheme.px(90);
+		denomDrop.setItems(DENOMINATOR_LABELS);
+		denomDrop.select(denomIndex(model.denominatorAt(editSection)));
+		flow.add(denomDrop);
 
 		speedStep = new UIStepper("Scroll Speed", colW, 1.0, 0.1, function(v:Float):Void {
 			undoStack.snapshotCoalesced(model, 'Scroll Speed');
@@ -1758,8 +1930,17 @@ class ChartingState extends MusicBeatState {
 		flow.header(tools);
 		flow.add(buttonPair(colW, "Copy", copySection, "Swap Sides", swapSection));
 		flow.add(buttonPair(colW, "Paste", pasteAtSection, "Duet", duetSection));
-		flow.add(buttonPair(colW, "Copy Last (-1)", copyLastSection, "Mirror", mirrorSection));
-		var clear:UIButton = new UIButton("Clear This Section", colW, UITheme.px(28), clearSection);
+		flow.add(buttonPair(colW, "Copy Prev", copyLastSection, "Mirror", mirrorSection));
+		var copyFromStep:UIStepper = new UIStepper("Copy From", colW, copyFromBack, 1, function(v:Float):Void {
+			copyFromBack = (v < 1) ? 1 : Std.int(v);
+		});
+		copyFromStep.decimals = 0;
+		copyFromStep.min = 1;
+		copyFromStep.max = 999;
+		copyFromStep.boxWidth = UITheme.px(80);
+		flow.add(copyFromStep);
+		flow.add(new UIButton("Copy From", colW, UITheme.px(26), copyFromNSectionsBack));
+		var clear:UIButton = new UIButton("Clear Section", colW, UITheme.px(28), clearSection);
 		clear.danger = true;
 		flow.add(clear);
 
@@ -1844,6 +2025,10 @@ class ChartingState extends MusicBeatState {
 		var first:SongNote = selection.notes[0];
 		hitTimeStep.value = first.time;
 		sustainStep.value = first.length;
+		// step the sustain by one snap unit at the note's section, not a raw 0.5ms nudge (which
+		// was too fine to ever build a visible hold).
+		var susStep:Float = model.snapMs(model.sectionAt(first.time), snap.value);
+		sustainStep.step = (susStep > 1) ? susStep : 1;
 		var idx:Int = noteTypesList.indexOf((first.type != null) ? first.type : '');
 		if (idx >= 0)
 			noteTypeDrop.select(idx);
@@ -1876,6 +2061,49 @@ class ChartingState extends MusicBeatState {
 		undoStack.snapshot(model, 'Copy Last');
 		var added:Int = model.copyFromSection(editSection, -1);
 		UIToast.show('Copied $added notes from the previous section');
+	}
+
+	function copyFromNSectionsBack():Void {
+		var back:Int = (copyFromBack < 1) ? 1 : copyFromBack;
+		if (editSection - back < 0) {
+			UIToast.show('No section $back back to copy from');
+			return;
+		}
+		undoStack.snapshot(model, 'Copy From -$back');
+		var added:Int = model.copyFromSection(editSection, -back);
+		UIToast.show('Copied $added notes from $back section(s) back');
+	}
+
+	/** Applies the saved theme preset + optional custom accent to the live UI. **/
+	function applyThemeFromPrefs():Void {
+		var idx:Int = clampIndex(EditorPrefs.themePreset, ui.UITheme.PRESETS.length);
+		ui.UITheme.apply(ui.UITheme.PRESETS[idx].palette);
+		if (EditorPrefs.accentOverride >= 0)
+			ui.UITheme.applyAccent(EditorPrefs.accentOverride);
+	}
+
+	/** Parses a `RRGGBB` / `#RRGGBB` hex string, or -1 when it isn't a valid colour. **/
+	static function parseHexColor(s:String):Int {
+		if (s == null)
+			return -1;
+		s = StringTools.trim(s);
+		if (StringTools.startsWith(s, '#'))
+			s = s.substr(1);
+		if (StringTools.startsWith(s, '0x') || StringTools.startsWith(s, '0X'))
+			s = s.substr(2);
+		if (s.length != 6)
+			return -1;
+		var v:Null<Int> = Std.parseInt('0x' + s);
+		return (v != null) ? (v & 0xFFFFFF) : -1;
+	}
+
+	/** Re-snaps every note in the chart to the current grid snap. **/
+	function adaptNotesToSnap():Void {
+		undoStack.snapshot(model, 'Adapt Notes');
+		var moved:Int = model.snapAllNotes(snap.value);
+		model.markDirty();
+		selection.prune(model.chart.noteList);
+		UIToast.show('Adapted $moved notes to ${snap.label()}');
 	}
 
 	function clearSection():Void {
@@ -1989,6 +2217,121 @@ class ChartingState extends MusicBeatState {
 		buildStrumlineRows(flow, colW);
 	}
 
+	/** First player strumline (fallback 0) - the default pattern target. **/
+	function defaultPatternLine():Int {
+		var lines = model.chart.strumLines;
+		var i:Int = 0;
+		while (i < lines.length) {
+			if (lines[i].isPlayer)
+				return i;
+			i++;
+		}
+		return 0;
+	}
+
+	/** PTRN tab: pick a preset VSRG pattern and drop it onto a line at the playhead. **/
+	function buildPatternsPanel(flow:DockFlow, colW:Float):Void {
+		flow.header(new UIAccordion("Patterns", colW));
+		addHintRow(flow, colW, "Drops an osu!mania-style preset at the playhead.");
+
+		var patDrop:UIDropdown = new UIDropdown("Pattern", colW, function(i:Int, _:String):Void patternId = i);
+		patDrop.boxWidth = UITheme.px(130);
+		patDrop.setItems(ChartPattern.NAMES);
+		patDrop.select(clampIndex(patternId, ChartPattern.NAMES.length));
+		flow.add(patDrop);
+
+		var lenStep:UIStepper = new UIStepper("Length (steps)", colW, patternLength, 1, function(v:Float):Void {
+			patternLength = Std.int(v < 1 ? 1 : v);
+		});
+		lenStep.min = 1;
+		lenStep.max = 256;
+		lenStep.tooltip = "How many snap steps the pattern spans (spacing = current snap)";
+		flow.add(lenStep);
+
+		var lines = model.chart.strumLines;
+		var lineIds:Array<String> = [];
+		var lineIdx:Array<Int> = [];
+		var li:Int = 0;
+		while (li < lines.length) {
+			lineIds.push(lines[li].id + (lines[li].isPlayer ? " (P)" : ""));
+			lineIdx.push(li);
+			li++;
+		}
+		if (patternLine < 0 || patternLine >= lines.length)
+			patternLine = defaultPatternLine();
+		var lineDrop:UIDropdown = new UIDropdown("Target Line", colW, function(i:Int, _:String):Void patternLine = lineIdx[i]);
+		lineDrop.boxWidth = UITheme.px(130);
+		lineDrop.setItems(lineIds);
+		var sel:Int = lineIdx.indexOf(patternLine);
+		lineDrop.select(sel >= 0 ? sel : 0);
+		flow.add(lineDrop);
+
+		flow.add(new UIButton("Place at Playhead", colW, UITheme.px(28), placePattern));
+		var mouseToggle:UICheckbox = new UICheckbox("Place with Mouse", colW, patternArmed, function(v:Bool):Void patternArmed = v);
+		mouseToggle.tooltip = "While on, click the grid to drop the pattern at that lane and time";
+		flow.add(mouseToggle);
+	}
+
+	/** Places the selected pattern at the playhead on the chosen target line (button entry point). **/
+	function placePattern():Void {
+		var line:Int = patternLine;
+		if (line < 0 || line >= model.chart.strumLines.length)
+			line = defaultPatternLine();
+		placePatternAt(line, model.floorTime(noteField.viewTime, snap.value));
+	}
+
+	/**
+		Generates the selected pattern and inserts its notes on a strumline starting at a time.
+		@param line the target strumline index
+		@param startTime the (snapped) start time in ms
+	**/
+	function placePatternAt(line:Int, startTime:Float):Void {
+		var lines = model.chart.strumLines;
+		if (line < 0 || line >= lines.length) {
+			UIToast.show('No target strumline');
+			return;
+		}
+		var kc:Int = lines[line].keyCount;
+		var offsets:Array<PatternNote> = ChartPattern.build(patternId, kc, patternLength);
+		if (offsets.length == 0)
+			return;
+
+		undoStack.snapshot(model, 'Place Pattern');
+		var startSteps:Float = noteField.stepsOf(startTime);
+		var per:Float = snapSteps();
+		var placed:Array<SongNote> = [];
+
+		// suppress per-note refreshes; one markDirty covers the whole batch
+		var saved:Void->Void = model.onChanged;
+		model.onChanged = null;
+		for (pn in offsets) {
+			if (pn.col < 0 || pn.col >= kc)
+				continue;
+			var t:Float = noteField.timeOfSteps(startSteps + pn.step * per);
+			if (model.noteAt(t, line, pn.col) != null)
+				continue;
+			placed.push(model.addNote(t, line, pn.col));
+		}
+		// grow sections if the pattern runs past the current chart end (still refresh-suppressed)
+		if (placed.length > 0) {
+			var lastT:Float = noteField.timeOfSteps(startSteps + patternLength * per);
+			var guard:Int = 0;
+			while (model.endTime <= lastT && guard++ < 4000)
+				model.ensureSectionCount(model.sectionCount() + 1);
+		}
+		model.onChanged = saved;
+		model.markDirty();
+
+		if (placed.length > 0) {
+			selection.setAll(placed);
+			if (scripts != null && scripts.hasScripts)
+				for (note in placed)
+					scripts.call('onNotePlaced', [note.time, note.column, note.strumLine]);
+			UIToast.show('Placed ${placed.length} notes (${ChartPattern.NAMES[patternId]})');
+		} else
+			UIToast.show('Nothing placed (spots occupied or off-lane)');
+	}
+
 	function buildStrumlineRows(flow:DockFlow, colW:Float):Void {
 		var lines = model.chart.strumLines;
 		var i:Int = 0;
@@ -2010,7 +2353,7 @@ class ChartingState extends MusicBeatState {
 	function rebuildStrumlineUI():Void {
 		if (!EditorPrefs.combinedDock)
 			buildRightDock();
-		buildLeftPanel(shell.rail.selectedIndex, true);
+		buildLeftPanel(currentPanel(), true);
 	}
 
 	/** Public dock re-render for scripts. **/
@@ -2180,12 +2523,29 @@ class ChartingState extends MusicBeatState {
 
 		var waveDrop:UIDropdown = new UIDropdown("Waveform Source", colW, function(index:Int, _:String):Void {
 			EditorPrefs.waveTarget = index;
-			noteField.waveSource = audio.waveformSound(index);
+			applyWaveConfig();
 		});
 		waveDrop.boxWidth = UITheme.px(130);
 		waveDrop.setItems(["Instrumental", "Player Vocals", "Opponent Vocals"]);
 		waveDrop.select(clampIndex(EditorPrefs.waveTarget, 3));
 		flow.add(waveDrop);
+		flow.add(new UICheckbox("Per-Strumline Waveform", colW, EditorPrefs.wavePerStrum, function(v:Bool):Void {
+			EditorPrefs.wavePerStrum = v;
+			applyWaveConfig();
+		}));
+	}
+
+	/** Pushes the current waveform prefs onto the note field: either a single centered source, or the
+		opponent + player vocals drawn over their own strumlines when `wavePerStrum` is on. **/
+	function applyWaveConfig():Void {
+		if (noteField == null)
+			return;
+		noteField.wavePerStrum = EditorPrefs.wavePerStrum;
+		if (EditorPrefs.wavePerStrum) {
+			noteField.waveSourceA = audio.waveformSound(2); // opponent vocals over line 0
+			noteField.waveSourceB = audio.waveformSound(1); // player vocals over line 1
+		} else
+			noteField.waveSource = audio.waveformSound(EditorPrefs.waveTarget);
 	}
 
 	/** Enumerates default + `custom_events/*.txt` event definitions (`[name, description]`). **/
@@ -2580,7 +2940,7 @@ class ChartingState extends MusicBeatState {
 		if (inside && !UIRoot.overlayOpen) {
 			var ghostLane:Int = noteField.laneAt(mx);
 			if (ghostLane >= 0)
-				noteField.showGhost(ghostLane, placeTimeAt(my), FlxG.keys.pressed.SHIFT ? 0.2 : snapSteps());
+				noteField.showGhost(ghostLane, placeTimeAt(my), FlxG.keys.pressed.SHIFT ? 0.2 : snapSteps(), EditorPrefs.snapRegionGhost);
 			else
 				noteField.hideGhost();
 		} else
@@ -2588,7 +2948,7 @@ class ChartingState extends MusicBeatState {
 
 		var wheel:Int = FlxG.mouse.wheel;
 		if (wheel != 0 && inside)
-			noteField.scrollSteps(-wheel * snapSteps());
+			noteField.scrollBySnap(-wheel, snap.value);
 
 		// Ctrl+LMB drag = box select
 		if (boxing) {
@@ -2606,6 +2966,15 @@ class ChartingState extends MusicBeatState {
 			boxX = mx;
 			boxY = my;
 			return;
+		}
+
+		// armed pattern: a grid click drops the whole pattern at that lane/time
+		if (patternArmed && FlxG.mouse.justPressed && inside && !UIPointer.downOnUI && !FlxG.keys.pressed.CONTROL) {
+			var line:Int = noteField.laneStrumLine(noteField.laneAt(mx));
+			if (line >= 0) {
+				placePatternAt(line, placeTimeAt(my));
+				return;
+			}
 		}
 
 		if (FlxG.mouse.justPressed && inside && !UIPointer.downOnUI) {
@@ -2657,8 +3026,12 @@ class ChartingState extends MusicBeatState {
 				var len:Float = t - placingNote.time;
 				if (len < 0)
 					len = 0;
-				if (len != placingNote.length)
+				if (len != placingNote.length) {
 					model.setNoteLength(placingNote, len);
+					// keep the Selected panel's Sustain field in sync while dragging the tail
+					if (sustainStep != null && selection.count == 1 && selection.notes[0] == placingNote)
+						sustainStep.value = placingNote.length;
+				}
 			} else
 				placingNote = null;
 		}
@@ -2797,13 +3170,13 @@ class ChartingState extends MusicBeatState {
 		var upHeld:Bool = EditorKeybinds.pressed('step_up');
 		var downHeld:Bool = EditorKeybinds.pressed('step_down');
 		if (EditorKeybinds.justPressed('step_up') || EditorKeybinds.justPressed('step_down')) {
-			noteField.scrollSteps(EditorKeybinds.justPressed('step_up') ? -snapSteps() : snapSteps());
+			noteField.scrollBySnap(EditorKeybinds.justPressed('step_up') ? -1 : 1, snap.value);
 			scrollHold = -0.35;
 		} else if (upHeld || downHeld) {
 			scrollHold += elapsed;
 			while (scrollHold >= 0.05) {
 				scrollHold -= 0.05;
-				noteField.scrollSteps(upHeld ? -snapSteps() : snapSteps());
+				noteField.scrollBySnap(upHeld ? -1 : 1, snap.value);
 			}
 		}
 

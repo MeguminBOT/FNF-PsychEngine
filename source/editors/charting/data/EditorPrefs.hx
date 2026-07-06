@@ -7,6 +7,10 @@ import flixel.FlxG;
 	Load once on state boot, save on exit and after toggles change.
 **/
 final class EditorPrefs {
+	/** Bumped whenever the default values change; a stale saved version forces a one-time reset to
+		the new defaults (so default changes actually reach users who already have a saved profile). **/
+	public static inline var PREFS_VERSION:Int = 2;
+
 	/** Waveform overlay toggle. **/
 	public static var waveform:Bool = true;
 
@@ -55,8 +59,8 @@ final class EditorPrefs {
 	/** Opponent-side hitsound volume (0 = off). **/
 	public static var hitsoundO:Float = 0.0;
 
-	/** Metronome sound preset index. **/
-	public static var metroPreset:Int = 0;
+	/** Metronome sound preset index (1 = Beep, the default). **/
+	public static var metroPreset:Int = 1;
 
 	/** Accent the first beat of each section with a pitched tick. **/
 	public static var metroAccent:Bool = true;
@@ -67,11 +71,35 @@ final class EditorPrefs {
 	/** Waveform source: 0 = inst, 1 = player vocals, 2 = opponent vocals. **/
 	public static var waveTarget:Int = 0;
 
+	/** When true, ignore `waveTarget` and draw opponent + player vocals over their own strumlines. **/
+	public static var wavePerStrum:Bool = false;
+
+	/** Highlight the whole snap region under the cursor (the multi-cell marker); off by default. **/
+	public static var snapRegionGhost:Bool = false;
+
+	/** How notes react to a BPM change (0 = keep ms, 1 = rescale, 2 = snap); default rescale. **/
+	public static var bpmAdapt:Int = 1;
+
+	/** How notes react to a time-signature change (0 = keep ms, 1 = rescale, 2 = snap); default keep. **/
+	public static var timeSigAdapt:Int = 0;
+
+	/** Selected UI theme preset index (into `UITheme.PRESETS`). **/
+	public static var themePreset:Int = 0;
+
+	/** Custom accent colour override (RGB), or -1 to use the preset's accent. **/
+	public static var accentOverride:Int = -1;
+
 	/** Reads the persisted options from the save file (missing keys keep their defaults). **/
 	public static function load():Void {
 		var d:Dynamic = FlxG.save.data.chartEditorPrefs;
 		if (d == null)
 			return;
+		// A saved profile from before the current defaults: keep it out, let the new defaults stand,
+		// and rewrite it stamped with the current version (one-time reset on a defaults change).
+		if (d.version == null || (d.version : Int) < PREFS_VERSION) {
+			save();
+			return;
+		}
 		if (d.waveform != null)
 			waveform = d.waveform;
 		if (d.metronome != null)
@@ -106,11 +134,24 @@ final class EditorPrefs {
 			notePoolCap = d.notePoolCap;
 		if (d.waveTarget != null)
 			waveTarget = d.waveTarget;
+		if (d.wavePerStrum != null)
+			wavePerStrum = d.wavePerStrum;
+		if (d.snapRegionGhost != null)
+			snapRegionGhost = d.snapRegionGhost;
+		if (d.bpmAdapt != null)
+			bpmAdapt = d.bpmAdapt;
+		if (d.timeSigAdapt != null)
+			timeSigAdapt = d.timeSigAdapt;
+		if (d.themePreset != null)
+			themePreset = d.themePreset;
+		if (d.accentOverride != null)
+			accentOverride = d.accentOverride;
 	}
 
 	/** Writes the persisted options to the save file and flushes it. **/
 	public static function save():Void {
 		FlxG.save.data.chartEditorPrefs = {
+			version: PREFS_VERSION,
 			waveform: waveform,
 			metronome: metronome,
 			hitsounds: hitsounds,
@@ -126,7 +167,13 @@ final class EditorPrefs {
 			metroPreset: metroPreset,
 			metroAccent: metroAccent,
 			notePoolCap: notePoolCap,
-			waveTarget: waveTarget
+			waveTarget: waveTarget,
+			wavePerStrum: wavePerStrum,
+			snapRegionGhost: snapRegionGhost,
+			bpmAdapt: bpmAdapt,
+			timeSigAdapt: timeSigAdapt,
+			themePreset: themePreset,
+			accentOverride: accentOverride
 		};
 		FlxG.save.flush();
 	}

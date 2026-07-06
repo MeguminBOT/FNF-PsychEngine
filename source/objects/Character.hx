@@ -23,6 +23,7 @@ typedef CharacterFile = {
 	var no_antialiasing:Bool;
 	var healthbar_colors:Array<Int>;
 	var vocals_file:String;
+	@:optional var loop_sing_on_hold:Null<Bool>;
 	@:optional var _editor_isPlayer:Null<Bool>;
 }
 
@@ -54,6 +55,14 @@ class Character extends FlxSprite {
 	public var animationNotes:Array<Dynamic> = [];
 	public var stunned:Bool = false;
 	public var singDuration:Float = 4; // Multiplier of how long a character holds the sing pose
+
+	/** When true, the sing animation is replayed (looped) for the duration of a held sustain instead of
+		freezing on its last frame. Opt-in per character via the `loop_sing_on_hold` json field. **/
+	public var loopSingOnHold:Bool = false;
+
+	/** Set true each frame by `PlayState` while this character is actively holding a sustain; drives the
+		`loopSingOnHold` re-trigger. Self-clears in `update` so it falls back to false once the hold ends. **/
+	public var singHold:Bool = false;
 	public var idleSuffix:String = '';
 	public var danceIdle:Bool = false; // Character use "danceLeft" and "danceRight" instead of "idle"
 	public var skipDance:Bool = false;
@@ -180,6 +189,7 @@ class Character extends FlxSprite {
 		// data
 		healthIcon = json.healthicon;
 		singDuration = json.sing_duration;
+		loopSingOnHold = (json.loop_sing_on_hold == true);
 		flipX = (json.flip_x != isPlayer);
 		baseFlipX = flipX;
 		baseFlipY = flipY;
@@ -297,6 +307,19 @@ class Character extends FlxSprite {
 		var name:String = getAnimationName();
 		if (isAnimationFinished() && hasAnimation('$name-loop'))
 			playAnim('$name-loop');
+		else if (loopSingOnHold
+			&& singHold
+			&& name != null
+			&& name.startsWith('sing')
+			&& name.indexOf('miss') < 0
+			&& name.indexOf('-loop') < 0
+			&& !hasAnimation('$name-loop')
+			&& isAnimationFinished())
+			playAnim(name, true); // replay the sing pose for the length of the held sustain
+
+		// PlayState re-asserts this every frame the sustain is held; clearing it here lets it lapse to
+		// false one frame after the hold ends (Character.update runs before PlayState's hold loop).
+		singHold = false;
 
 		super.update(elapsed);
 	}

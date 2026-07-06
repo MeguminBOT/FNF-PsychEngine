@@ -158,7 +158,10 @@ final class NoteSprite extends FlxSprite {
 
 		fillSplashData(noteSplashData);
 
-		if (data.texture != null && data.texture.length > 0) {
+		// Force Selected Skin blocks a PLAIN note's texture override (script / chart per-note texture); a
+		// note carrying a custom type keeps its type's texture.
+		var forceSkip:Bool = ClientPrefs.data.forceNoteSkin && (data.type == null || data.type == '');
+		if (!forceSkip && data.texture != null && data.texture.length > 0) {
 			// Per-note custom graphic (note type / data.texture): route through the `texture` setter, which
 			// does the classic build with the standard centered-on-strum layout -- skipping the active
 			// skin's applyNote (otherwise a folder skin's centerOnStrum/offsets would be left on top of a
@@ -166,7 +169,13 @@ final class NoteSprite extends FlxSprite {
 			texture = data.texture;
 		} else {
 			@:bypassAccessor texture = null;
+			// Force Selected Skin: pin the active skin's asset resolution to its owner so a mod can't shadow it.
+			var prevPin:Null<String> = Paths.pinModRoot;
+			var pin:Null<String> = backend.NoteSkinConfig.activeSkinPinRoot();
+			if (pin != null)
+				Paths.pinModRoot = pin;
 			var v:NoteVisual = NoteSkinService.current().applyNote(this, rgbShader, column, keyCount, null);
+			Paths.pinModRoot = prevPin;
 			offsetX = v.offsetX;
 			offsetY = v.offsetY;
 			centerOnStrum = v.centerOnStrum;

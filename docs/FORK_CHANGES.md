@@ -4,12 +4,23 @@ Baseline: archived-repo commit
 [`5c67ced`](https://github.com/ShadowMario/FNF-PsychEngine/commit/5c67ced49e5a98535298a6daa3f8f4ec79ac8399)
 ("Update gitVersion.txt", 2025-03-24).
 
-Summary of the diff `5c67ced..HEAD`: **147 commits, 172 files changed,
-~17,400 insertions / ~16,900 deletions**. That's only for the updated libraries, formatting, bugfixes, more to come later!
+This document covers two distinct eras of work, and is split accordingly:
+
+- **[Part 1: Base Engine Fixes](#part-1-base-engine-fixes)** -- `5c67ced..153fe63a`, **179 commits,
+  188 files changed, ~20,300 insertions / ~17,800 deletions**. Modernization of the archived engine:
+  updated libraries, a rewritten build/setup process, ModSecurity, and a large backlog of crash and
+  bug fixes. The goal of this era was compatibility and maintenance, not new features.
+- **[Part 2: Fork-Specific Features](#part-2-fork-specific-features)** --
+  `153fe63a..HEAD`, **173 commits, 594 files changed, ~56,900 insertions / ~17,100 deletions**. New,
+  fork-original systems built on top of the modernized base: the chart editor rewrite, the note/UI
+  skin rework, multikey and time-signature support, the osu! beatmap converter, Android support, and
+  more.
 
 ([source/states/MainMenuState.hx](../source/states/MainMenuState.hx#L16))
 
 ---
+
+## Part 1: Base Engine Fixes
 
 ## Library swaps and version changes
 
@@ -143,27 +154,6 @@ Over **80 distinct fixes** in the range — single-purpose commits. Grouped:
   `MusicPlayer.updatePlaybackTxt`, `OverlayShader`, `StageData`, and several
   Lua reflection callsites.
 
-### Multithreaded loading — song-load softlocks
-The threaded asset loader (`LoadingState`) could freeze the game indefinitely on
-song load. Reworked across three commits:
-
-- [`d2cab02`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/d2cab02) -- Atomic
-  load counters. The `loaded++` mutex was commented out, so concurrent worker
-  increments were lost and `loaded` never reached `loadMax` — the loader waited
-  forever. Counters now use a dedicated always-alive mutex; `startThreads()` fires
-  exactly once; the thread pool is created once per load (was up to 3×, leaking
-  workers); `requestedBitmaps` is snapshot-swapped under its mutex in `checkLoaded`.
-- [`824a09a`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/824a09a) -- Replaced
-  the lime `Future` chain + per-character thread fan-out + completion latch with one
-  sequential prep task on the pool (no more concurrent pushes into the prepare lists,
-  one threading system). Prep always reaches `startThreads()` even on exception, so a
-  failed prep can no longer leave the loader hung.
-- [`08b781f`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/08b781f) -- Load
-  watchdog: if loading makes zero progress for 30s it force-completes (logging
-  diagnostics, lazy-loading the rest) instead of freezing, on both the loading-screen
-  and the headless busy-wait paths. Pool size capped at 6 (loading is I/O-bound too many threads loading would just be slower) 
-  and the progress bar is guarded against a divide-by-zero.
-
 ### Off-by-one / bounds
 - [`ef81461`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/ef81461) -- `Note.defaultRGB`.
 - [`aafd17c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/aafd17c) -- `StrumNote.arrowRGB`.
@@ -275,3 +265,274 @@ Roughly **30 perf-focused commits**. Highlights:
   `grig.audio`, `hxcpp`). If a dependency's API drift breaks the build again,
   the fastest mitigation is to re-pin to the original commits listed in the
   table above.
+
+---
+
+## Part 2: Fork-Specific Features
+
+Boundary commit: [`153fe63a`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/153fe63a4d4aec55f67026093249a65a70d402be)
+("Fixed runHaxeCode issues due to script.setDefaults"). Everything from here on is fork-original
+work: new systems, not compatibility fixes for the archived engine. Engine version moved from 1.1
+through **1.2.1** (current) across this range.
+
+This part is a tour of the major systems, grouped by area, not a commit-by-commit log -- there are
+173 commits here. Representative commit links are given per system for anyone who wants to dig into
+the history.
+
+### Real Lua scripting & ScriptedStates hardening
+
+- [`97bcea8`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/97bcea8) -- Initial direct-access
+  Lua implementation: the object-bridge groundwork that `LuaProxy` (raw-mode Lua) and the chart
+  editor's `EditorLuaScript` both build on.
+- [`151e199`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/151e199),
+  [`8dc572e`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/8dc572e),
+  [`992c74c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/992c74c) -- ScriptedStates
+  fixes: object access and method-lookup caching, backwards-compatibility fixes across both Lua and
+  HScript.
+- [`12d1c9b`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/12d1c9b) -- Switched
+  `hscript-insanity` to a personal fork to unblock class-based scripted-state fixes upstream hadn't
+  merged yet.
+- [`df31fc2`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/df31fc2) -- Scripted states keep
+  scope to the launched modpack (a scripted state from one mod can no longer reach into another's
+  files).
+- [`2887b6d`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/2887b6d) -- Null-checks corrupt
+  `chart_editor_data` in a song's metadata instead of crashing on load.
+- [`557dbff`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/557dbff) -- `FlxG` and `Paths` are
+  usable from Lua without an explicit `import()` call.
+- [`207bcbe`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/207bcbe) -- HScript errors
+  originating from a Lua call now show line numbers.
+- [`7219640`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/7219640) -- Script load order is
+  controllable per mod via `_order.txt` / `_loadorder.txt`.
+- [`40f9d3c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/40f9d3c) -- Scripted states
+  support bare-root global overrides (a mod's top-level `states/X.hx` can override an engine state
+  wholesale) with a clean camera/song-return path.
+
+See [LuaProxy-API.md](LuaProxy-API.md), [SCRIPTED_STATES.md](SCRIPTED_STATES.md) and
+[REAL_LUA.md](REAL_LUA.md) / [REAL_LUA_TECH_DEBT.md](REAL_LUA_TECH_DEBT.md) for the user-facing and
+technical-debt documentation of this system.
+
+### Note runtime v2 (full note-logic rewrite)
+
+- [`e321460`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/e321460) -- Full rewrite of the
+  note logic: notes and strumlines are no longer built around the legacy `FlxTypedGroup<Note>` +
+  index-based lookups. The new stack splits pure data (`NoteData`) from drawables
+  (`NoteSprite`/`SustainSprite`/`Receptor`), pools everything, and drives the strumlines from the
+  native `SongChart` model directly (`PlayState.SONG` *is* the chart, not a converted copy).
+- [`374541a`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/374541a) -- Neutral `NoteDefaults`
+  + per-note custom textures, decoupling v2 fully from the legacy runtime.
+- [`918c060`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/918c060) -- Custom-note skinning
+  API: per-part textures (head / hold body / tail), independent RGB toggling, and Lua callbacks for
+  scripted note types.
+- [`fcc882c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/fcc882c),
+  [`57d0e8e`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/57d0e8e),
+  [`e3f1527`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/e3f1527),
+  [`6bc7acb`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/6bc7acb) -- The strumline-native
+  `psych_v2` chart format: `SongChart` becomes the primary in-memory chart (up to N strumlines,
+  `cameraTarget` per section, data-driven character singing), `Conductor` reads native chart
+  sections for timing, and the old psych_v1 `SwagSong` format converts up to it on load.
+- [`6634dcf`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/6634dcf),
+  [`e331460`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/e331460),
+  [`413e4b2`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/413e4b2) -- `compatibilityMode`:
+  a modpack flag that runs the pre-v2 note/strumline code as a legacy shim (mirroring
+  `goodNoteHit`/`noteMiss`/strum geometry/hold head-tail behavior) for mods whose scripts poke the
+  old internals directly, plus a script converter that rewrites outdated calls automatically.
+- [`c72e26c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/c72e26c),
+  [`2039e8d`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/2039e8d) -- Sustain scaling and
+  angle/rotation fixes for the new pooled sustain drawables.
+- [`490b526`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/490b526),
+  [`b4a1f61`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/b4a1f61),
+  [`a2824cd`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/a2824cd),
+  [`226d443`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/226d443) -- Hot-path performance
+  work on the new note/strum stack: cached scroll-axis vectors, allocation-free column-hit
+  resolution on key press, pooled RGB shader + splash data reuse on recycle, trimmed per-frame
+  script-callback overhead.
+- [`d052677`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/d052677),
+  [`8be6988`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/8be6988) -- Score, combo and a
+  proper judgement on sustain hits; the sustain trail now ends cleanly on the endTime step line.
+
+See [note-system-v2.md](note-system-v2.md) and [docs/examples/custom-notes](examples/custom-notes)
+/ [docs/examples/glitch-notes](examples/glitch-notes) for the scripting-facing side of this.
+
+### Folder note skins v2 & per-asset colors
+
+- [`2cdb225`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/2cdb225),
+  [`ddd5904`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/ddd5904),
+  [`1c6e15e`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/1c6e15e) -- Initial note-skinning
+  rework: folder-based skins with per-object animated/colored toggles, treating a single static frame
+  as its own valid case.
+- [`d33a362`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/d33a362),
+  [`8a2a0cb`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/8a2a0cb) -- Decoupled note skins
+  from the note system entirely and added the custom `.tcfg` config format (JSON still works as a
+  fallback), plus pixel-art variants for the Default and Chip skins.
+- [`cde68b7`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/cde68b7),
+  [`a63ae99`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/a63ae99) -- Migrated the built-in
+  Default, Chip and Future skins to the new folder-skin system.
+- [`5b24f2b`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/5b24f2b) -- Fixed folder- and
+  pixel-skin resolution edge cases.
+- [`aae0df0`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/aae0df0),
+  [`2184ef7`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/2184ef7),
+  [`76e599d`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/76e599d),
+  [`a4010de`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/a4010de),
+  [`2c082bf`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/2c082bf),
+  [`7881cdd`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/7881cdd),
+  [`053eb7a`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/053eb7a) -- Per-asset note
+  colors: each skin element can be linked to the note color palette or given its own independent
+  color, editable per keycount through a redesigned Note Colors menu (click-to-edit).
+- [`990910a`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/990910a),
+  [`162f53b`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/162f53b),
+  [`f0fbe0b`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/f0fbe0b) -- Note splashes
+  decoupled from note visuals entirely, centered on the receptor, with their own independent color.
+- [`6a7d2dd`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/6a7d2dd) -- Strumlines are
+  symmetrically placed and middle-scroll is properly centered for any key count.
+
+New full-reference guide: [note-skinning-guidelines.md](note-skinning-guidelines.md).
+
+### UI skin system
+
+- [`aa7418a`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/aa7418a) -- Judgement / combo /
+  countdown folder-skin system: a UI skin themes the rating popups, the "combo" word, combo numbers
+  and the ready/set/go countdown, plus their tween motion and popup placement, entirely separately
+  from note skins.
+
+New full-reference guide: [ui-skinning-guidelines.md](ui-skinning-guidelines.md).
+
+### Chart editor rewrite (`ChartingState`) & the `ui` framework
+
+- [`a6a3025`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/a6a3025) -- A full custom UI
+  framework (`source/ui/`) written from scratch: a retained-mode, invalidation-driven widget kit on
+  top of plain OpenFL display objects (no Flixel dependency), used for every menu, dropdown, modal
+  and tooltip in the new editor.
+- [`8587032`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/8587032) -- A completely new chart
+  editor built on that framework: decoupled data (`ChartEditorModel`, `UndoStack`, `SelectionModel`,
+  `ClipboardModel`), a pooled Flixel notefield reusing the note-v2 drawables/skins, rebindable
+  keybinds, autosave/backups, and rail-tab panels for every song/section/event/data/audio/meta/
+  display/options concern the legacy editor had.
+- [`595f4e7`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/595f4e7) -- The old chart editor
+  moved to `legacy.editors.*` and stays fully functional (`compatibilityMode` and the debug menu both
+  still offer it as "Legacy Chart Editor").
+- [`68014d2`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/68014d2) -- Data/asset handling
+  optimizations in the new editor (pooled note drawables, window-realized rendering).
+- [`a46281e`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/a46281e),
+  [`4128623`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/4128623) -- Every editor (chart,
+  character, stage, animation, dialogue, credits, week, ...) moved into a single top-level
+  `source/editors/` package instead of being scattered across `source/states/`.
+- Scripting: `EditorScriptHost` loads `scripts/charteditor/*.lua|*.hx` in raw-LuaProxy /
+  HScript mode and dispatches editor-lifecycle hooks (`onNotePlaced`, `onSectionChanged`,
+  `onSave`, ...) -- see [docs/examples/charteditor](examples/charteditor).
+
+### Time signatures & multikey (N-key) support
+
+- [`0b5c1dc`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/0b5c1dc) -- Chart data layer gains
+  time signatures, a `keyCount` for multikey songs, and per-section overrides for both.
+- [`f4b4883`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/f4b4883) -- Meter-aware beat
+  tracking so BPM/step/beat math respects a section's own time signature.
+- [`ce4a37f`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/ce4a37f) -- Multikey gameplay:
+  N-key strums, notes, splashes, input handling, and mid-song lane-count changes.
+- [`ca9dfde`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/ca9dfde) -- Chart editor multikey
+  grid with per-section key-count / scroll-speed / time-signature toggles.
+- [`1313f13`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/1313f13) -- Chart editor Options
+  tab: metronome presets, an in-editor character preview, and quantized note colors.
+- [`123ffbc`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/123ffbc) -- BPM re-snap/rescale
+  and downscroll support in the chart editor.
+
+### osu! beatmap converter
+
+- [`d548d91`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/d548d91),
+  [`6da5e53`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/6da5e53) -- A converters backend
+  and the initial osu!mania `.osz`/`.osu` -> Psych song conversion (a bundled ffmpeg handles audio /
+  video re-encoding).
+  - [`5233ed7`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/5233ed7) -- Quantization,
+    scroll-velocity conversion, batch importing.
+  - [`463987c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/463987c) -- Alignment fixed by
+    shifting the audio instead of re-timing every note; video conversion sped up.
+- [`6532e1b`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/6532e1b),
+  [`2bdd8eb`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/2bdd8eb) -- osu!**std** -> mania
+  conversion (a custom lane-assignment heuristic with anti-jack logic), multi-keycount passes in one
+  batch, and a generated `settings.json` for the converted modpack.
+- [`ab6afb8`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/ab6afb8),
+  [`ab29504`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/ab29504),
+  [`c5bafa9`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/c5bafa9) -- osu! storyboard (`.osb`)
+  support: a spec-derived parser and native player, storyboard sample sounds, on-hit note hitsounds
+  via chart events, and storyboards prioritized over plain video/background when present.
+- [`449d9bd`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/449d9bd) -- An osu!mania-style star
+  difficulty-rating engine with an MD5-keyed chart cache, surfaced in Freeplay's song-info flyout.
+- [`8060110`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/8060110) -- Converter UI redesign:
+  keycount picker and a scrollable conversion log.
+
+### Android support
+
+- [`c2aed95`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/c2aed95) -- Initial Android
+  support (arm64 only; DiscordRPC disabled on mobile).
+- [`072f314`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/072f314),
+  [`958b869`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/958b869),
+  [`f77a6df`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/f77a6df) -- Touch-pad / hitbox
+  controls layered above the Flixel game, with per-modpack opt-out (`nativeMobile` in `pack.json`)
+  falling back to the default pads.
+- [`47e3d71`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/47e3d71),
+  [`00a25a9`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/00a25a9),
+  [`dea7630`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/dea7630) -- Android file-access
+  macro for hardwired asset paths, HScript routed through the correct paths, crash logs saved to
+  `crash/`.
+- [`849e8b9`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/849e8b9) -- Adaptive/themed app
+  icon support.
+- [`72ca596`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/72ca596) -- Gameplay-changers
+  button for mobile.
+
+### Freeplay, options, and other user-facing rework
+
+- [`b6eee6c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/b6eee6c) -- Freeplay: per-song
+  saved difficulties, search, sort and grouping.
+- [`9264e76`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/9264e76) -- Freeplay no longer
+  needs a week file to list a song.
+- [`3c05a9c`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/3c05a9c) -- Song info & difficulty
+  star-rating flyout.
+- [`feac8cc`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/feac8cc) -- Animated favorite-star
+  icon.
+- [`e696c1e`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/e696c1e) -- Options menu: full
+  rework with a new two-depth category/setting navigation
+  ([`c9aa73b`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/c9aa73b)).
+- [`286b04f`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/286b04f) -- Credits screen initial
+  rework.
+- [`512d449`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/512d449) -- Self-updating
+  functionality.
+- [`056bdb4`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/056bdb4),
+  [`c443216`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/c443216) -- Flip/scale-aware
+  character animation offsets, fixing JSON offsets on characters that default to `flipX`.
+- [`cc0f143`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/cc0f143) -- A performance-counter
+  overlay with CPU/GPU/memory metrics.
+
+### LoadingState multithreading fix
+
+The threaded asset loader (`LoadingState`) could freeze the game indefinitely on song load.
+Reworked across three commits:
+
+- [`d2cab02`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/d2cab02) -- Atomic load counters.
+  The `loaded++` mutex was commented out, so concurrent worker increments were lost and `loaded`
+  never reached `loadMax` -- the loader waited forever. Counters now use a dedicated always-alive
+  mutex; `startThreads()` fires exactly once; the thread pool is created once per load (was up to
+  3x, leaking workers); `requestedBitmaps` is snapshot-swapped under its mutex in `checkLoaded`.
+- [`824a09a`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/824a09a) -- Replaced the lime
+  `Future` chain + per-character thread fan-out + completion latch with one sequential prep task on
+  the pool (no more concurrent pushes into the prepare lists, one threading system). Prep always
+  reaches `startThreads()` even on exception, so a failed prep can no longer leave the loader hung.
+- [`08b781f`](https://github.com/MeguminBOT/FNF-PsychEngine/commit/08b781f) -- Load watchdog: if
+  loading makes zero progress for 30s it force-completes (logging diagnostics, lazy-loading the
+  rest) instead of freezing, on both the loading-screen and the headless busy-wait paths. Pool size
+  capped at 6 (loading is I/O-bound; more threads would just add contention), and the progress bar
+  is guarded against a divide-by-zero.
+
+---
+
+## Part 2 maintainer notes
+
+- `compatibilityMode` and the legacy editor package (`legacy.editors.*`, `legacy.*` note runtime) are
+  the escape hatch for mods that poke pre-v2 internals directly. Keep them in sync with any future
+  v2-side renames, or document the break in [MIGRATION_1.0.4_to_1.1.md](MIGRATION_1.0.4_to_1.1.md).
+- The `ui` package (`source/ui/`) is written to be extractable as a standalone haxelib later: it has
+  zero references to Flixel, Psych Engine states, or asset paths. Keep it that way if you touch it.
+- The osu! converter bundles its own ffmpeg binary; if that binary is ever swapped or upgraded, retest
+  both the audio path and the video/storyboard path.
+- Folder note skins and UI skins share the same `.tcfg` config format and discovery rules
+  (`images/noteSkins/<Name>/skin.tcfg`, `images/uiSkins/<Name>/skin.tcfg`) -- see
+  [note-skinning-guidelines.md](note-skinning-guidelines.md) and
+  [ui-skinning-guidelines.md](ui-skinning-guidelines.md).
