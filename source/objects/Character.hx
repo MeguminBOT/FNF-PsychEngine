@@ -305,15 +305,16 @@ class Character extends FlxSprite {
 		}
 
 		var name:String = getAnimationName();
-		if (isAnimationFinished() && hasAnimation('$name-loop'))
-			playAnim('$name-loop');
+		var loop:String = getLoopSuffixType(name);
+		if (isAnimationFinished() && hasAnimation('$name-$loop'))
+			playAnim('$name-$loop');
 		else if (loopSingOnHold
 			&& singHold
 			&& name != null
 			&& name.startsWith('sing')
 			&& name.indexOf('miss') < 0
-			&& name.indexOf('-loop') < 0
-			&& !hasAnimation('$name-loop')
+			&& name.indexOf('-$loop') < 0
+			&& !hasAnimation('$name-$loop')
 			&& isAnimationFinished())
 			playAnim(name, true); // replay the sing pose for the length of the held sustain
 
@@ -332,6 +333,18 @@ class Character extends FlxSprite {
 
 	inline public function getAnimationName():String {
 		return _lastPlayedAnimation;
+	}
+
+	var _finalLoopSuffixType:String;
+
+	inline public function getLoopSuffixType(base:String):String {
+		if (hasAnimation(base + '-loop')) {
+			_finalLoopSuffixType = 'loop';
+		}
+		else if (hasAnimation(base + '-hold')) {
+			_finalLoopSuffixType = 'hold';
+		}
+		return _finalLoopSuffixType;
 	}
 
 	public function isAnimationFinished():Bool {
